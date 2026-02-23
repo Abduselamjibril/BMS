@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { CreateSiteDto } from './dto/create-site.dto';
 
 @ApiTags('Sites')
 @Controller('sites')
@@ -12,8 +13,9 @@ export class SitesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a site' })
+  @ApiBody({ type: CreateSiteDto })
   @ApiResponse({ status: 201, description: 'Site created.' })
-  async create(@Body() dto: any) {
+  async create(@Body() dto: CreateSiteDto) {
     return this.sitesService.create(dto);
   }
 

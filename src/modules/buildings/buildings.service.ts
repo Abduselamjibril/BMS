@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Building } from './entities/building.entity';
@@ -6,6 +6,8 @@ import { CreateBuildingDto } from './dto/create-building.dto';
 import { Unit } from '../units/entities/unit.entity';
 import { BuildingAdminAssignment } from './entities/building-admin-assignment.entity';
 import { User } from '../users/entities/user.entity';
+import { Site } from '../sites/entities/site.entity';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Injectable()
 export class BuildingsService {
@@ -18,13 +20,41 @@ export class BuildingsService {
     private readonly adminAssignmentRepo: Repository<BuildingAdminAssignment>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Site)
+    private readonly siteRepository: Repository<Site>,
+    @InjectRepository(Owner)
+    private readonly ownerRepository: Repository<Owner>,
   ) {}
 
   async create(dto: CreateBuildingDto): Promise<Building> {
-    // Validate unique code
-    const exists = await this.buildingRepository.findOne({ where: { code: dto['code'] } });
-    if (exists) throw new ConflictException('Building code must be unique');
-    const building = this.buildingRepository.create(dto);
+    // Fetch related Site and Owner
+    const site = await this.siteRepository.findOne({ where: { id: dto.siteId } });
+    if (!site) throw new NotFoundException('Site not found');
+    const owner = await this.ownerRepository.findOne({ where: { id: dto.ownerId } });
+    if (!owner) throw new NotFoundException('Owner not found');
+
+    // Parse latitude and longitude from site.location_lat_long
+    let latitude: number | undefined = undefined;
+    let longitude: number | undefined = undefined;
+    if (site.location_lat_long) {
+      const [lat, long] = site.location_lat_long.split(',').map(Number);
+      if (!isNaN(lat) && !isNaN(long)) {
+        latitude = lat;
+        longitude = long;
+      }
+    }
+
+    // Create building and assign relations, using site data for missing fields
+    const building = this.buildingRepository.create({
+      ...dto,
+      site,
+      owner,
+      city: site.city,
+      subcity: site.subcity,
+      latitude,
+      longitude,
+      // You may want to set country and total_units defaults here if needed
+    });
     return this.buildingRepository.save(building);
   }
 

@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/
 import { Auth } from '../../common/decorators/auth.decorator';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Buildings')
 @Controller('buildings')
@@ -11,7 +11,8 @@ export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a building (code must be unique)' })
+  @ApiOperation({ summary: 'Create a building (code must be unique, must link to site and owner)' })
+  @ApiBody({ type: CreateBuildingDto })
   create(@Body() dto: CreateBuildingDto) {
     return this.buildingsService.create(dto);
   }

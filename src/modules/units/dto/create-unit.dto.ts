@@ -1,23 +1,56 @@
+
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
-import { UnitType } from '../entities/unit.entity';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
+import { UnitType, UnitStatus } from '../entities/unit.entity';
 
 export class CreateUnitDto {
-  @ApiProperty({ description: 'Unit number' })
+
+  @ApiProperty({ description: 'Unit number', example: '101' })
   @IsString()
   @IsNotEmpty()
-  number!: string;
+  unit_number!: string;
 
-  @ApiProperty({ description: 'Unit type', enum: UnitType })
+  @ApiProperty({ description: 'Unit type', enum: UnitType, example: UnitType.ONE_BEDROOM })
   @IsEnum(UnitType)
   type!: UnitType;
 
-  @ApiProperty({ description: 'Floor', required: false, type: Number })
-  @IsOptional()
-  floor?: number;
+  @ApiProperty({ description: 'Floor', example: 1 })
+  @IsNumber()
+  floor!: number;
 
-  @ApiProperty({ description: 'Description', required: false })
+  @ApiProperty({ description: 'Size in square meters', example: 80 })
+  @IsNumber()
+  size_sqm!: number;
+
+  @ApiProperty({ description: 'Status', enum: UnitStatus, example: UnitStatus.VACANT })
+  @IsEnum(UnitStatus)
+  status!: UnitStatus;
+
+  @ApiProperty({ description: 'Number of bedrooms', example: 1 })
+  @IsNumber()
+  bedrooms!: number;
+
+  @ApiProperty({ description: 'Number of bathrooms', example: 1 })
+  @IsNumber()
+  bathrooms!: number;
+
+  @ApiProperty({ description: 'Building ID', example: 'a097e608-8df2-4716-85af-61df209ef5fc' })
+  @IsString()
+  @IsNotEmpty()
+  buildingId!: string;
+
+  @ApiProperty({ description: 'Description', required: false, example: 'Corner unit' })
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiProperty({ description: 'Rent price', required: false, example: 1200 })
+  @IsNumber()
+  @IsOptional()
+  rent_price?: number;
+
+  @ApiProperty({ description: 'Sale price', required: false, example: 150000 })
+  @IsNumber()
+  @IsOptional()
+  sale_price?: number;
 }

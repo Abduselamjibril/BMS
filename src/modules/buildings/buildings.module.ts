@@ -6,9 +6,11 @@ import { Building } from './entities/building.entity';
 import { BuildingAdminAssignment } from './entities/building-admin-assignment.entity';
 import { Unit } from '../units/entities/unit.entity';
 import { User } from '../users/entities/user.entity';
+import { Site } from '../sites/entities/site.entity';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Building, BuildingAdminAssignment, Unit, User])],
+  imports: [TypeOrmModule.forFeature([Building, BuildingAdminAssignment, Unit, User, Site, Owner])],
   controllers: [BuildingsController],
   providers: [BuildingsService],
 })
