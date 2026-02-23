@@ -19,7 +19,7 @@ export class UnitsService {
 
   async create(dto: CreateUnitDto): Promise<Unit> {
     // Unique unit_number per building
-    const exists = await this.unitRepository.findOne({ where: { building: dto['buildingId'], unit_number: dto['unit_number'] } });
+    const exists = await this.unitRepository.findOne({ where: { building: { id: dto['buildingId'] }, unit_number: dto['unit_number'] } });
     if (exists) throw new ConflictException('Unit number must be unique per building');
     const unit = this.unitRepository.create(dto);
     return this.unitRepository.save(unit);
