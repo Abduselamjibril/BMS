@@ -44,16 +44,21 @@ export class BuildingsService {
       }
     }
 
+    if (latitude === undefined || longitude === undefined) {
+      throw new BadRequestException('Site location_lat_long must be a valid "lat,long" value');
+    }
+
     // Create building and assign relations, using site data for missing fields
     const building = this.buildingRepository.create({
       ...dto,
       site,
       owner,
+      country: 'Ethiopia',
       city: site.city,
       subcity: site.subcity,
       latitude,
       longitude,
-      // You may want to set country and total_units defaults here if needed
+      total_units: 0,
     });
     return this.buildingRepository.save(building);
   }

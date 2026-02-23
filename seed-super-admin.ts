@@ -13,7 +13,7 @@ async function bootstrap() {
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@example.com';
   const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'SuperSecure123!';
 
-  // Check if super admin already exists
+  // Check if super admin already existss
   const existing = await userRepo.findOne({ where: { email: superAdminEmail } });
   if (existing) {
     console.log('Super admin already exists:', superAdminEmail);
