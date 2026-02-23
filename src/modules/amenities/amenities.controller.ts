@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import { Auth } from '../../common/decorators/auth.decorator';
 import { AmenitiesService } from './amenities.service';
 import { CreateAmenityDto } from './dto/create-amenity.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('Amenities')
 @Controller('amenities')
+@Auth()
 export class AmenitiesController {
   constructor(private readonly amenitiesService: AmenitiesService) {}
 

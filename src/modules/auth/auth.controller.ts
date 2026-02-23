@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Body, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Auth } from '../../common/decorators/auth.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from '../users/dto/login.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -19,14 +20,14 @@ export class AuthController {
     return this.authService.login(user);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile and permissions' })
   async getProfile(@Req() req: any) {
     return this.authService.getProfile(req.user);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   @Get('login-history')
   @ApiOperation({ summary: 'Get login history for current user' })
   async getLoginHistory(@Req() req: any) {

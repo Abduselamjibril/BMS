@@ -1,11 +1,13 @@
 import { Controller, Post, Get, Param, Body, Put, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Auth } from '../../common/decorators/auth.decorator';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto';
 
 @ApiTags('roles')
 @Controller('roles')
+@Auth()
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 

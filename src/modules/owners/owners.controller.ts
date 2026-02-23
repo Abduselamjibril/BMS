@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import { Auth } from '../../common/decorators/auth.decorator';
 import { OwnersService } from './owners.service';
 import { CreateOwnerDto } from './dto/create-owner.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('Owners')
 @Controller('owners')
+@Auth()
 export class OwnersController {
   constructor(private readonly ownersService: OwnersService) {}
 

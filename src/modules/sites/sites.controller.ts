@@ -2,10 +2,11 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@n
 import { SitesService } from './sites.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Auth } from '../../common/decorators/auth.decorator';
 
 @ApiTags('Sites')
 @Controller('sites')
-@UseGuards(JwtAuthGuard)
+@Auth()
 export class SitesController {
   constructor(private readonly sitesService: SitesService) {}
 

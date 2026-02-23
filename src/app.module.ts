@@ -1,5 +1,5 @@
 import { SitesModule } from './modules/sites/sites.module';
-import { UploadsModule } from './modules/uploads/uploads.module';
+import { UploadModule } from './modules/upload/upload.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,11 +24,11 @@ import { AuditModule } from './modules/audit/audit.module';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DATABASE_HOST || 'localhost',
-      port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-      username: process.env.DATABASE_USER || 'postgres',
-      password: process.env.DATABASE_PASSWORD || 'postgres',
-      database: process.env.DATABASE_NAME || 'nestjs_db',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT ?? '5432', 10),
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+      database: process.env.DB_NAME || 'bms_db',
       autoLoadEntities: true,
       synchronize: true,
     }),
@@ -41,7 +41,7 @@ import { AuditModule } from './modules/audit/audit.module';
     AmenitiesModule,
     AuditModule,
     SitesModule,
-    UploadsModule,
+    UploadModule,
     SettingsModule,
   ],
   controllers: [AppController],

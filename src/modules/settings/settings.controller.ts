@@ -2,10 +2,11 @@ import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Auth } from '../../common/decorators/auth.decorator';
 
 @ApiTags('Settings')
 @Controller('settings')
-@UseGuards(JwtAuthGuard)
+@Auth()
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
