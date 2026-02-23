@@ -2,6 +2,7 @@ import { Injectable, ConflictException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Unit, UnitStatus } from './entities/unit.entity';
+import { Building } from '../buildings/entities/building.entity';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UnitAmenity } from '../amenities/entities/unit-amenity.entity';
 import { Amenity } from '../amenities/entities/amenity.entity';
@@ -15,13 +16,20 @@ export class UnitsService {
     private readonly unitAmenityRepo: Repository<UnitAmenity>,
     @InjectRepository(Amenity)
     private readonly amenityRepo: Repository<Amenity>,
+    @InjectRepository(Building)
+    private readonly buildingRepository: Repository<Building>,
   ) {}
 
   async create(dto: CreateUnitDto): Promise<Unit> {
     // Unique unit_number per building
-    const exists = await this.unitRepository.findOne({ where: { building: { id: dto['buildingId'] }, unit_number: dto['unit_number'] } });
+    const building = await this.buildingRepository.findOne({ where: { id: dto.buildingId } });
+    if (!building) throw new BadRequestException('Building not found');
+    const exists = await this.unitRepository.findOne({ where: { building: { id: dto.buildingId }, unit_number: dto.unit_number } });
     if (exists) throw new ConflictException('Unit number must be unique per building');
-    const unit = this.unitRepository.create(dto);
+    const unit = this.unitRepository.create({
+      ...dto,
+      building,
+    });
     return this.unitRepository.save(unit);
   }
 
