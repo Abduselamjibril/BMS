@@ -27,13 +27,11 @@ export class BuildingsService {
   ) {}
 
   async create(dto: CreateBuildingDto): Promise<Building> {
-    // Fetch related Site and Owner
     const site = await this.siteRepository.findOne({ where: { id: dto.siteId } });
     if (!site) throw new NotFoundException('Site not found');
     const owner = await this.ownerRepository.findOne({ where: { id: dto.ownerId } });
     if (!owner) throw new NotFoundException('Owner not found');
 
-    // Parse latitude and longitude from site.location_lat_long
     let latitude: number | undefined = undefined;
     let longitude: number | undefined = undefined;
     if (site.location_lat_long) {
@@ -44,7 +42,6 @@ export class BuildingsService {
       }
     }
 
-    // Create building and assign relations, using site data for missing fields
     const building = this.buildingRepository.create({
       ...dto,
       site,
@@ -53,15 +50,16 @@ export class BuildingsService {
       subcity: site.subcity,
       latitude,
       longitude,
-      // You may want to set country and total_units defaults here if needed
     });
     return this.buildingRepository.save(building);
   }
 
   async findAll(userId?: string, role?: string): Promise<Building[]> {
     if (role === 'nominee_admin' && userId) {
-      // Only buildings assigned to this user
-      const assignments = await this.adminAssignmentRepo.find({ where: { user: { id: userId } }, relations: ['building'] });
+      const assignments = await this.adminAssignmentRepo.find({ 
+        where: { user: { id: userId } }, 
+        relations: ['building'] 
+      });
       return assignments.map(a => a.building);
     }
     return this.buildingRepository.find();
@@ -77,32 +75,48 @@ export class BuildingsService {
   }
 
   async remove(id: string): Promise<void> {
-    // Fail if any units exist in this building
     const units = await this.unitRepository.find({ where: { building: { id } } });
     if (units.length > 0) throw new BadRequestException('Cannot delete building with units');
     await this.buildingRepository.delete(id);
   }
 
-  // Assignment engine
   async assignAdmin(buildingId: string, userId: string) {
     const building = await this.buildingRepository.findOne({ where: { id: buildingId } });
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!building || !user) throw new BadRequestException('Invalid building or user');
-    const exists = await this.adminAssignmentRepo.findOne({ where: { building: { id: buildingId }, user: { id: userId } } });
+    
+    const exists = await this.adminAssignmentRepo.findOne({ 
+      where: { building: { id: buildingId }, user: { id: userId } } 
+    });
     if (exists) throw new ConflictException('User already assigned to building');
+    
     const assignment = this.adminAssignmentRepo.create({ building, user });
     return this.adminAssignmentRepo.save(assignment);
   }
 
   async getAdmins(buildingId: string) {
-    const assignments = await this.adminAssignmentRepo.find({ where: { building: { id: buildingId } }, relations: ['user'] });
+    const assignments = await this.adminAssignmentRepo.find({ 
+      where: { building: { id: buildingId } }, 
+      relations: ['user'] 
+    });
     return assignments.map(a => a.user);
   }
 
   async revokeAdmin(buildingId: string, userId: string) {
-    const assignment = await this.adminAssignmentRepo.findOne({ where: { building: { id: buildingId }, user: { id: userId } } });
+    const assignment = await this.adminAssignmentRepo.findOne({ 
+      where: { building: { id: buildingId }, user: { id: userId } } 
+    });
     if (!assignment) throw new BadRequestException('Assignment not found');
     await this.adminAssignmentRepo.delete(assignment.id);
     return { revoked: true };
+  }
+
+  async getAmenities(buildingId: string) {
+    const building = await this.buildingRepository.findOne({ 
+      where: { id: buildingId }, 
+      relations: ['buildingAmenities', 'buildingAmenities.amenity'] 
+    });
+    if (!building) throw new BadRequestException('Building not found');
+    return building.buildingAmenities.map((ba) => ba.amenity);
   }
 }

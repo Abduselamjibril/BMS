@@ -2,6 +2,8 @@ import { SitesModule } from './modules/sites/sites.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { Module } from '@nestjs/common';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config'; // <-- 1. Import ConfigModule
 import { AppController } from './app.controller';
@@ -18,6 +20,10 @@ import { AuditModule } from './modules/audit/audit.module';
 
 @Module({
   imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'public'),
+      serveRoot: '/static',
+    }),
     // 2. Add this line BEFORE TypeOrmModule
     ConfigModule.forRoot({
       isGlobal: true, 

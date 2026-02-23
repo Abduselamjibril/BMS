@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Request } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Buildings')
 @Controller('buildings')
@@ -11,16 +11,15 @@ export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a building (code must be unique, must link to site and owner)' })
+  @ApiOperation({ summary: 'Create a building' })
   @ApiBody({ type: CreateBuildingDto })
   create(@Body() dto: CreateBuildingDto) {
     return this.buildingsService.create(dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all buildings (nominee_admin sees only assigned)' })
+  @ApiOperation({ summary: 'Get all buildings' })
   findAll(@Request() req) {
-    // user info is attached to req.user by JwtStrategy
     const userId = req.user?.id;
     const role = req.user?.role || null;
     return this.buildingsService.findAll(userId, role);
@@ -39,16 +38,21 @@ export class BuildingsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete building by id (fails if units exist)' })
+  @ApiOperation({ summary: 'Delete building by id' })
   remove(@Param('id') id: string) {
     return this.buildingsService.remove(id);
   }
 
-  // Building assignment engine
-  @Post(':id/assign-admin')
+  @Get(':id/amenities')
+  @ApiOperation({ summary: 'List amenities linked to building' })
+  async getAmenities(@Param('id') buildingId: string) {
+    return this.buildingsService.getAmenities(buildingId);
+  }
+
+  @Post(':buildingId/assign-admin/:userId')
   @ApiOperation({ summary: 'Assign nominee admin to building' })
-  assignAdmin(@Param('id') buildingId: string, @Body() dto: { userId: string }) {
-    return this.buildingsService.assignAdmin(buildingId, dto.userId);
+  assignAdmin(@Param('buildingId') buildingId: string, @Param('userId') userId: string) {
+    return this.buildingsService.assignAdmin(buildingId, userId);
   }
 
   @Get(':id/admins')
