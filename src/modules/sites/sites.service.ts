@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Site } from './entities/site.entity';
@@ -31,8 +31,9 @@ export class SitesService {
   }
 
   async update(id: string, dto: Partial<Site>): Promise<Site | null> {
-    await this.siteRepo.update(id, dto);
-    return this.findOne(id);
+    const prepared = await this.siteRepo.preload({ id: id as any, ...(dto as object) });
+    if (!prepared) throw new NotFoundException('Site not found');
+    return this.siteRepo.save(prepared);
   }
 
   async remove(id: string): Promise<void> {

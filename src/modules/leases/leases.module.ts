@@ -1,0 +1,35 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { LeasesController } from './leases.controller';
+import { LeasesService } from './leases.service';
+import { Lease } from './entities/lease.entity';
+import { UnitOccupancyHistory } from './entities/unit-occupancy-history.entity';
+import { LeasePayment } from './entities/lease-payment.entity';
+import { Unit } from '../units/entities/unit.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { Building } from '../buildings/entities/building.entity';
+import { TenantDocument } from '../tenants/entities/tenant-document.entity';
+import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { LeasesScheduler } from './leases.scheduler';
+import { LeasePdfService } from './services/lease-pdf.service';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Lease,
+      UnitOccupancyHistory,
+      LeasePayment,
+      Unit,
+      Tenant,
+      Building,
+      TenantDocument,
+      BuildingAdminAssignment,
+      UserRole,
+    ]),
+  ],
+  controllers: [LeasesController],
+  providers: [LeasesService, LeasesScheduler, LeasePdfService],
+  exports: [LeasesService],
+})
+export class LeasesModule {}

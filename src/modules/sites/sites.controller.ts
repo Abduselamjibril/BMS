@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { CreateSiteDto } from './dto/create-site.dto';
+import { UpdateSiteDto } from './dto/update-site.dto';
 
 @ApiTags('Sites')
 @Controller('sites')
@@ -36,7 +37,18 @@ export class SitesController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update a site' })
   @ApiResponse({ status: 200, description: 'Site updated.' })
-  async update(@Param('id') id: string, @Body() dto: any) {
+  @ApiBody({
+    description: 'Fields to update for the site (partial)',
+    schema: {
+      example: {
+        name: 'Updated Site Name',
+        city: 'Kigali',
+        subcity: 'Nyarugenge',
+        location_lat_long: ' -1.9579, 30.0619 '
+      },
+    },
+  })
+  async update(@Param('id') id: string, @Body() dto: UpdateSiteDto) {
     return this.sitesService.update(id, dto);
   }
 

@@ -17,6 +17,8 @@ import { UnitsModule } from './modules/units/units.module';
 
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
+import { LeasesModule } from './modules/leases/leases.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { AuditModule } from './modules/audit/audit.module';
     SitesModule,
     UploadModule,
     SettingsModule,
+    TenantsModule,
+    LeasesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
