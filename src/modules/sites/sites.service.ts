@@ -22,14 +22,29 @@ export class SitesService {
     return this.siteRepo.find({ relations: ['buildings'] });
   }
 
+  async findOne(id: string): Promise<Site | null> {
+    // Note: Use "id: id as any" if your Entity ID is a number but your param is a string
+    return this.siteRepo.findOne({ 
+      where: { id: id as any }, 
+      relations: ['buildings'] 
+    });
+  }
+
   async update(id: string, dto: Partial<Site>): Promise<Site | null> {
     await this.siteRepo.update(id, dto);
-    return this.siteRepo.findOne({ where: { id } });
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
-    const buildings = await this.buildingRepo.find({ where: { site: { id } } });
-    if (buildings.length > 0) throw new BadRequestException('Cannot delete site with linked buildings');
+    // Check if there are linked buildings before deleting
+    const buildings = await this.buildingRepo.find({ 
+      where: { site: { id: id as any } } 
+    });
+
+    if (buildings.length > 0) {
+      throw new BadRequestException('Cannot delete site with linked buildings');
+    }
+
     await this.siteRepo.delete(id);
   }
 }

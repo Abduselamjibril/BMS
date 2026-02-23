@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, Request } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
@@ -19,7 +19,10 @@ export class BuildingsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all buildings (nominee_admin sees only assigned)' })
-  findAll(@Query('user_id') userId?: string, @Query('role') role?: string) {
+  findAll(@Request() req) {
+    // user info is attached to req.user by JwtStrategy
+    const userId = req.user?.id;
+    const role = req.user?.role || null;
     return this.buildingsService.findAll(userId, role);
   }
 

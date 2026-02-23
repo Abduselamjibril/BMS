@@ -26,6 +26,13 @@ export class SitesController {
     return this.sitesService.findAll();
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get site by id' })
+  @ApiResponse({ status: 200, description: 'Site details.' })
+  async findOne(@Param('id') id: string) {
+    return this.sitesService.findOne(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a site' })
   @ApiResponse({ status: 200, description: 'Site updated.' })
