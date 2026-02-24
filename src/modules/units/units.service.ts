@@ -44,16 +44,24 @@ export class UnitsService {
     return this.unitRepository.findOne({ where: { id } });
   }
 
-  async update(id: string, dto: Partial<CreateUnitDto>): Promise<Unit | null> {
-    await this.unitRepository.update(id, dto);
+  async update(id: string, dto: Partial<CreateUnitDto & { buildingId?: string }>): Promise<Unit | null> {
+    let updatePayload: any = { ...dto };
+    if (dto.buildingId) {
+      const building = await this.buildingRepository.findOne({ where: { id: dto.buildingId } });
+      if (!building) throw new BadRequestException('Building not found');
+      updatePayload.building = building;
+      delete updatePayload.buildingId;
+    }
+    await this.unitRepository.update(id, updatePayload);
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
     const unit = await this.unitRepository.findOne({ where: { id } });
     if (!unit) throw new BadRequestException('Unit not found');
     if (unit.status === UnitStatus.OCCUPIED) throw new BadRequestException('Cannot delete occupied unit');
     await this.unitRepository.delete(id);
+    return { message: 'Unit deleted successfully.' };
   }
 
   async bulkUpload(file: any) {

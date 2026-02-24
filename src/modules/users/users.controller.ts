@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Body, Param, Patch, Delete } from '@nestjs/common';
-import { Auth } from '../../common/decorators/auth.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { Auth } from '../../common/decorators/auth.decorator';
 
 @ApiTags('users')
+@ApiBearerAuth()
 @Controller('users')
 @Auth()
 export class UsersController {
@@ -31,8 +33,31 @@ export class UsersController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update user details or reset password' })
-  async update(@Param('id') id: string, @Body() dto: any) {
-    return this.usersService.update(id, dto);
+  @ApiBody({
+    type: UpdateUserDto,
+    description: 'User update data',
+    examples: {
+      example1: {
+        value: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          password: 'NewPassword123!',
+          status: 'active'
+        }
+      }
+    }
+  })
+  async update(
+    @Param('id') id: string, 
+    @Body() updateUserDto: UpdateUserDto
+  ) {
+    return this.usersService.update(id, updateUserDto);
+  }
+
+  @Patch(':id/activate')
+  @ApiOperation({ summary: 'Activate an inactive user' })
+  async activate(@Param('id') id: string) {
+    return this.usersService.activate(id);
   }
 
   @Delete(':id')

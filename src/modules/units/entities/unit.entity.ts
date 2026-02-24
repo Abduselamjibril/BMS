@@ -53,6 +53,9 @@ export class Unit {
   @Column('int')
   bathrooms!: number;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  description?: string;
+
   @OneToMany(() => UnitAmenity, (ua) => ua.unit)
   unitAmenities!: UnitAmenity[];
 }

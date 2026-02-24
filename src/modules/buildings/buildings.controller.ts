@@ -33,7 +33,27 @@ export class BuildingsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update building by id' })
-  update(@Param('id') id: string, @Body() dto: Partial<CreateBuildingDto>) {
+  @ApiBody({
+    schema: {
+      example: {
+        name: 'Updated Building Name',
+        code: 'BLD-001',
+        type: 'residential',
+        country: 'Ethiopia',
+        city: 'Addis Ababa',
+        subcity: 'Bole',
+        address: '123 Main St',
+        latitude: 9.03,
+        longitude: 38.74,
+        total_units: 10,
+        status: 'active',
+        siteId: 'site-uuid',
+        ownerId: 'owner-uuid'
+      }
+    },
+    type: require('./dto/create-building.dto').CreateBuildingDto
+  })
+  update(@Param('id') id: string, @Body() dto: Partial<import('./dto/create-building.dto').CreateBuildingDto>) {
     return this.buildingsService.update(id, dto);
   }
 

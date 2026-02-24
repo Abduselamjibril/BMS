@@ -48,8 +48,12 @@ export class Building {
   @Column({ length: 50 })
   subcity!: string;
 
+
   @Column({ length: 200 })
   address!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  description?: string;
 
   @Column('decimal', { precision: 10, scale: 6 })
   latitude!: number;

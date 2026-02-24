@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { 
+  Injectable, 
+  NotFoundException, 
+  ConflictException, 
+  BadRequestException 
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -13,13 +19,22 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existing = await this.userRepository.findOne({ where: { email: createUserDto.email } });
-    if (existing) throw new ConflictException('Email already in use');
+    const existing = await this.userRepository.findOne({ 
+      where: { email: createUserDto.email } 
+    });
+    
+    if (existing) {
+      throw new ConflictException('Email already in use');
+    }
+
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
     const user = this.userRepository.create({
       ...createUserDto,
-      password_hash: await bcrypt.hash(createUserDto.password, 10),
+      password_hash: hashedPassword,
       status: createUserDto.status ?? UserStatus.ACTIVE,
     });
+
     return this.userRepository.save(user);
   }
 
@@ -33,20 +48,49 @@ export class UsersService {
 
   async findById(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
     return user;
   }
 
-  async update(id: string, dto: Partial<User>): Promise<User> {
-    await this.userRepository.update(id, dto);
-    return this.findById(id);
+  async update(id: string, dto: UpdateUserDto): Promise<User> {
+    const user = await this.findById(id);
+
+    // If a password is provided in the update DTO, hash it before saving
+    if (dto.password) {
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      // Map the DTO password to the entity password_hash field
+      (user as any).password_hash = hashedPassword;
+      // Remove the plain password from the DTO so Object.assign doesn't overwrite
+      delete dto.password;
+    }
+
+    // Merge other updates
+    Object.assign(user, dto);
+    
+    return this.userRepository.save(user);
+  }
+
+  async activate(id: string): Promise<User> {
+    const user = await this.findById(id);
+    user.status = UserStatus.ACTIVE;
+    return this.userRepository.save(user);
   }
 
   async softDelete(id: string): Promise<User> {
     const user = await this.findById(id);
     user.status = UserStatus.INACTIVE;
-    await this.userRepository.save(user);
-    return user;
+    return this.userRepository.save(user);
+  }
+
+  async remove(id: string): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      return { message: 'User not found or already deleted.' };
+    }
+    await this.userRepository.delete(id);
+    return { message: 'User deleted successfully.' };
   }
 
   async save(user: User): Promise<User> {

@@ -25,6 +25,9 @@ export class Role {
   @Column({ type: 'enum', enum: RoleType })
   type!: RoleType;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  description?: string;
+
   @OneToMany(() => UserRole, (userRole) => userRole.role)
   userRoles!: UserRole[];
 

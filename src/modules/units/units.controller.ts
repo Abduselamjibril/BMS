@@ -59,7 +59,22 @@ export class UnitsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update unit by id' })
-  update(@Param('id') id: string, @Body() dto: Partial<CreateUnitDto>) {
+  @ApiBody({
+    schema: {
+      example: {
+        unit_number: '101',
+        type: '1BR',
+        floor: 1,
+        size_sqm: 80,
+        status: 'vacant',
+        bedrooms: 1,
+        bathrooms: 1,
+        buildingId: 'a097e608-8df2-4716-85af-61df209ef5fc'
+      }
+    },
+    type: require('./dto/create-unit.dto').CreateUnitDto
+  })
+  update(@Param('id') id: string, @Body() dto: Partial<import('./dto/create-unit.dto').CreateUnitDto>) {
     return this.unitsService.update(id, dto);
   }
 

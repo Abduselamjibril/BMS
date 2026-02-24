@@ -36,15 +36,15 @@ export class RolesService {
     return updated;
   }
 
-  async remove(id: string): Promise<{ deleted: boolean }> {
+  async remove(id: string): Promise<{ message: string }> {
     // Check if any users are assigned to this role
     const role = await this.roleRepository.findOne({ where: { id }, relations: ['userRoles'] });
-    if (!role) throw new NotFoundException('Role not found');
+    if (!role) return { message: 'Role not found or already deleted.' };
     if (role.userRoles && role.userRoles.length > 0) {
       throw new ConflictException('Cannot delete role: users are assigned');
     }
     await this.roleRepository.delete(id);
-    return { deleted: true };
+    return { message: 'Role deleted successfully.' };
   }
 
   async assignPermissions(roleId: string, dto: AssignPermissionsDto) {

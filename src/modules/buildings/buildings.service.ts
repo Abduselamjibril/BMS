@@ -76,19 +76,43 @@ export class BuildingsService {
     return this.buildingRepository.find();
   }
 
-  async findOne(id: string): Promise<Building | null> {
-    return this.buildingRepository.findOne({ where: { id } });
+  async findOne(id: string): Promise<Building> {
+    const building = await this.buildingRepository.findOne({ where: { id } });
+    if (!building) throw new NotFoundException('Building not found');
+    return building;
   }
 
-  async update(id: string, dto: Partial<CreateBuildingDto>): Promise<Building | null> {
-    await this.buildingRepository.update(id, dto);
-    return this.findOne(id);
+  async update(id: string, dto: Partial<CreateBuildingDto & { siteId?: string; ownerId?: string }>): Promise<{ message: string; building?: Building }> {
+    const building = await this.buildingRepository.findOne({ where: { id } });
+    if (!building) throw new NotFoundException('Building not found');
+
+    // Handle relations
+    let updatePayload: any = { ...dto };
+    if (dto.siteId) {
+      const site = await this.siteRepository.findOne({ where: { id: dto.siteId } });
+      if (!site) throw new NotFoundException('Site not found');
+      updatePayload.site = site;
+      delete updatePayload.siteId;
+    }
+    if (dto.ownerId) {
+      const owner = await this.ownerRepository.findOne({ where: { id: dto.ownerId } });
+      if (!owner) throw new NotFoundException('Owner not found');
+      updatePayload.owner = owner;
+      delete updatePayload.ownerId;
+    }
+
+    await this.buildingRepository.update(id, updatePayload);
+    const updated = await this.buildingRepository.findOne({ where: { id } });
+    return { message: 'Building updated successfully.', building: updated ?? undefined };
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
+    const building = await this.buildingRepository.findOne({ where: { id } });
+    if (!building) return { message: 'Building not found or already deleted.' };
     const units = await this.unitRepository.find({ where: { building: { id } } });
     if (units.length > 0) throw new BadRequestException('Cannot delete building with units');
     await this.buildingRepository.delete(id);
+    return { message: 'Building deleted successfully.' };
   }
 
   async assignAdmin(buildingId: string, userId: string) {

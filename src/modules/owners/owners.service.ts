@@ -29,12 +29,13 @@ export class OwnersService {
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
     const owner = await this.ownerRepository.findOne({ where: { id }, relations: ['buildings'] });
     if (!owner) throw new BadRequestException('Owner not found');
     if (owner.buildings && owner.buildings.length > 0) {
       throw new BadRequestException('Cannot delete owner with buildings');
     }
     await this.ownerRepository.delete(id);
+    return { message: 'Owner deleted successfully.' };
   }
 }

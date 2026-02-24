@@ -36,7 +36,7 @@ export class SitesService {
     return this.siteRepo.save(prepared);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
     // Check if there are linked buildings before deleting
     const buildings = await this.buildingRepo.find({ 
       where: { site: { id: id as any } } 
@@ -46,6 +46,9 @@ export class SitesService {
       throw new BadRequestException('Cannot delete site with linked buildings');
     }
 
+    const site = await this.siteRepo.findOne({ where: { id: id as any } });
+    if (!site) return { message: 'Site not found or already deleted.' };
     await this.siteRepo.delete(id);
+    return { message: 'Site deleted successfully.' };
   }
 }

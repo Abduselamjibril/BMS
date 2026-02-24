@@ -76,7 +76,10 @@ export class AmenitiesService {
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
+    const amenity = await this.amenityRepository.findOne({ where: { id } });
+    if (!amenity) return { message: 'Amenity not found or already deleted.' };
     await this.amenityRepository.delete(id);
+    return { message: 'Amenity deleted successfully.' };
   }
 }

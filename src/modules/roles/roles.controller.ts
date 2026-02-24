@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Param, Body, Put, Delete } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto';
@@ -26,6 +26,16 @@ export class RolesController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Edit role name/type' })
+  @ApiBody({
+    schema: {
+      example: {
+        name: 'company_admin',
+        type: 'company',
+        description: 'Updated description for company admin'
+      }
+    },
+    type: CreateRoleDto
+  })
   async update(@Param('id') id: string, @Body() dto: Partial<CreateRoleDto>) {
     return this.rolesService.update(id, dto);
   }
