@@ -10,12 +10,18 @@ import { User, UserStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
+import { Role } from '../roles/entities/role.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepository: Repository<UserRole>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -35,7 +41,17 @@ export class UsersService {
       status: createUserDto.status ?? UserStatus.ACTIVE,
     });
 
-    return this.userRepository.save(user);
+    const saved = await this.userRepository.save(user);
+
+    // If role_id provided, validate and create UserRole link
+    if (createUserDto.role_id) {
+      const role = await this.roleRepository.findOne({ where: { id: createUserDto.role_id } });
+      if (!role) throw new BadRequestException('role_id is invalid');
+      const ur = this.userRoleRepository.create({ user: saved as any, role: role as any });
+      await this.userRoleRepository.save(ur);
+    }
+
+    return saved;
   }
 
   async findAll(): Promise<User[]> {

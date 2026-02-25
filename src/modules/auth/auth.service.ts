@@ -1,8 +1,11 @@
 import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { RolePermission } from '../roles/entities/role-permission.entity';
+import { Permission } from '../roles/entities/permission.entity';
+import { UsersService } from '../users/users.service';
 import { LoginHistory } from '../users/entities/login-history.entity';
 import { LoginDto } from '../users/dto/login.dto';
 import { UserStatus } from '../users/entities/user.entity';
@@ -15,6 +18,12 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @InjectRepository(LoginHistory)
     private readonly loginHistoryRepo: Repository<LoginHistory>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+    @InjectRepository(RolePermission)
+    private readonly rolePermissionRepo: Repository<RolePermission>,
+    @InjectRepository(Permission)
+    private readonly permissionRepo: Repository<Permission>,
   ) {}
 
   async validateUser(loginDto: LoginDto, ip: string) {
@@ -39,10 +48,36 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { sub: user.id, email: user.email };
+    // Load roles for this user
+    const userRoles = await this.userRoleRepo.find({ where: { user: { id: user.id } }, relations: ['role'] });
+    const roleIds = userRoles.map((ur) => (ur.role as any).id);
+    const roleNames = userRoles.map((ur) => (ur.role as any).name);
+
+    // Load permissions assigned to these roles
+    let permissionCodes: string[] = [];
+    if (roleIds.length > 0) {
+      const rolePerms = await this.rolePermissionRepo.find({ where: { role: { id: In(roleIds) } } as any, relations: ['permission'] as any });
+      permissionCodes = Array.from(new Set(rolePerms.map((rp) => (rp.permission as any).code)));
+    }
+
+    const payload = { sub: user.id, email: user.email, roles: roleNames, permissions: permissionCodes };
     return {
       access_token: this.jwtService.sign(payload),
     };
+  }
+
+  async refreshToken(user: any) {
+    // same enrichment as login
+    const userRoles = await this.userRoleRepo.find({ where: { user: { id: user.id } }, relations: ['role'] });
+    const roleIds = userRoles.map((ur) => (ur.role as any).id);
+    const roleNames = userRoles.map((ur) => (ur.role as any).name);
+    let permissionCodes: string[] = [];
+    if (roleIds.length > 0) {
+      const rolePerms = await this.rolePermissionRepo.find({ where: { role: { id: In(roleIds) } } as any, relations: ['permission'] as any });
+      permissionCodes = Array.from(new Set(rolePerms.map((rp) => (rp.permission as any).code)));
+    }
+    const payload = { sub: user.id, email: user.email, roles: roleNames, permissions: permissionCodes };
+    return { access_token: this.jwtService.sign(payload) };
   }
 
   async getProfile(user: any) {

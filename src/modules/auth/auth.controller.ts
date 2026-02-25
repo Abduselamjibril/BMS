@@ -33,4 +33,11 @@ export class AuthController {
   async getLoginHistory(@Req() req: any) {
     return this.authService.getLoginHistory(req.user);
   }
+
+  @Auth()
+  @Get('refresh-token')
+  @ApiOperation({ summary: 'Refresh JWT for long-lived mobile sessions' })
+  async refresh(@Req() req: any) {
+    return this.authService.refreshToken(req.user);
+  }
 }

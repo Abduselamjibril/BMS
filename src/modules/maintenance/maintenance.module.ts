@@ -18,6 +18,7 @@ import { UserBuilding } from '../users/entities/user-building.entity';
     ]),
   ],
   providers: [MaintenanceService],
+  exports: [MaintenanceService],
   controllers: [MaintenanceController],
 })
 export class MaintenanceModule {}

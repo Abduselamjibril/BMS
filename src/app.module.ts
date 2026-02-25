@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config'; // <-- 1. Import ConfigModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RolesGuard } from './common/guards/roles.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
@@ -22,6 +23,13 @@ import { LeasesModule } from './modules/leases/leases.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { DocumentModule } from './modules/documents/document.module';
+import { QrModule } from './modules/qr/qr.module';
+import { VisitorsModule } from './modules/visitors/visitors.module';
+import { UtilityModule } from './modules/utility/utility.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { TypeOrmModule as FeatureTypeOrmModule } from '@nestjs/typeorm';
+import { UserRole } from './modules/roles/entities/user-role.entity';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -58,9 +66,19 @@ import { DocumentModule } from './modules/documents/document.module';
     LeasesModule,
     FinanceModule,
     MaintenanceModule,
+    // Visitors module (Phase 6)
+    VisitorsModule,
+    // Utility meters & readings (Phase 6)
+    UtilityModule,
     DocumentModule,
+    // QR Module (Phase 5)
+    QrModule,
+    FeatureTypeOrmModule.forFeature([UserRole]),
+    NotificationsModule,
+    // Reports module (Phase 5)
+    ReportsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, RolesGuard],
 })
 export class AppModule {}

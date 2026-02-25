@@ -25,8 +25,26 @@ export class RolesService {
     return this.roleRepository.save(role);
   }
 
-  async findAll(): Promise<Role[]> {
-    return this.roleRepository.find({ relations: ['rolePermissions'] });
+  async findAll(): Promise<any[]> {
+    const roles = await this.roleRepository.find({ relations: ['rolePermissions', 'rolePermissions.permission'] });
+    return roles.map((r) => {
+      const permsMap = new Map<string, any>();
+      for (const rp of r.rolePermissions || []) {
+        const p = (rp as RolePermission).permission as Permission;
+        if (!p) continue;
+        // attach rolePermission id alongside permission and avoid duplicates
+        if (!permsMap.has(p.id)) {
+          permsMap.set(p.id, { id: p.id, code: p.code, description: p.description, rolePermissionId: (rp as RolePermission).id });
+        }
+      }
+      return {
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        description: r.description,
+        permissions: Array.from(permsMap.values()),
+      };
+    });
   }
 
   async update(id: string, dto: Partial<CreateRoleDto>): Promise<Role> {

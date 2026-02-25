@@ -6,6 +6,8 @@ export enum RoleName {
   SUPER_ADMIN = 'super_admin',
   COMPANY_ADMIN = 'company_admin',
   NOMINEE_ADMIN = 'nominee_admin',
+  ADMIN = 'admin',
+  SITE_ADMIN = 'site_admin',
 }
 
 export enum RoleType {

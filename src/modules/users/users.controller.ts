@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Param, Patch, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -15,18 +16,21 @@ export class UsersController {
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'User created successfully.' })
+  @Permissions('users:create')
   async create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all users' })
+  @Permissions('users:read')
   async findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get user by id' })
+  @Permissions('users:read')
   async findOne(@Param('id') id: string) {
     return this.usersService.findById(id);
   }
@@ -47,6 +51,7 @@ export class UsersController {
       }
     }
   })
+  @Permissions('users:update')
   async update(
     @Param('id') id: string, 
     @Body() updateUserDto: UpdateUserDto
@@ -56,12 +61,14 @@ export class UsersController {
 
   @Patch(':id/activate')
   @ApiOperation({ summary: 'Activate an inactive user' })
+  @Permissions('users:update')
   async activate(@Param('id') id: string) {
     return this.usersService.activate(id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete user (set status=inactive)' })
+  @Permissions('users:delete')
   async remove(@Param('id') id: string) {
     return this.usersService.softDelete(id);
   }

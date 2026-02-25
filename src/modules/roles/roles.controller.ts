@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Param, Body, Put, Delete } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -14,17 +15,20 @@ export class RolesController {
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
   @ApiResponse({ status: 201, description: 'Role created successfully.' })
+  @Permissions('roles:create')
   async create(@Body() createRoleDto: CreateRoleDto) {
     return this.rolesService.create(createRoleDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all roles' })
+  @Permissions('roles:read')
   async findAll() {
     return this.rolesService.findAll();
   }
 
   @Put(':id')
+  @Permissions('roles:update')
   @ApiOperation({ summary: 'Edit role name/type' })
   @ApiBody({
     schema: {
@@ -40,14 +44,18 @@ export class RolesController {
     return this.rolesService.update(id, dto);
   }
 
+  @Permissions('roles:update')
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a role (fails if users assigned)' })
+  @Permissions('roles:delete')
   async remove(@Param('id') id: string) {
     return this.rolesService.remove(id);
   }
 
   @Post(':id/permissions')
   @ApiOperation({ summary: 'Assign permissions to a role' })
+  @Permissions('roles:assign_permissions')
   async assignPermissions(@Param('id') id: string, @Body() dto: AssignPermissionsDto) {
     return this.rolesService.assignPermissions(id, dto);
   }
