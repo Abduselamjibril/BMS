@@ -19,6 +19,7 @@ import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { LeasesModule } from './modules/leases/leases.module';
+import { FinanceModule } from './modules/finance/finance.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { LeasesModule } from './modules/leases/leases.module';
     SettingsModule,
     TenantsModule,
     LeasesModule,
+    FinanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
