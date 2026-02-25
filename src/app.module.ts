@@ -20,6 +20,8 @@ import { AuditModule } from './modules/audit/audit.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { LeasesModule } from './modules/leases/leases.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { DocumentModule } from './modules/documents/document.module';
 
 @Module({
   imports: [
@@ -55,6 +57,8 @@ import { FinanceModule } from './modules/finance/finance.module';
     TenantsModule,
     LeasesModule,
     FinanceModule,
+    MaintenanceModule,
+    DocumentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
