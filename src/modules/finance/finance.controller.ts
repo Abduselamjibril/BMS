@@ -1,3 +1,4 @@
+import { Auth } from '../../common/decorators/auth.decorator';
 import { Controller, Post, Body, UseGuards, Get, Query, Patch, Delete } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -12,7 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Finance')
 @Controller('finance')
-@UseGuards(JwtAuthGuard)
+@Auth()
 // @UseGuards(RolesGuard) // Uncomment if RolesGuard is available
 export class FinanceController {
     @Get('invoices')

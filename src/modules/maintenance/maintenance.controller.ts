@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Auth } from '../../common/decorators/auth.decorator';
 import { MaintenanceService } from './maintenance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -6,7 +7,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Maintenance')
 @Controller('maintenance')
-@UseGuards(JwtAuthGuard)
+@Auth()
 export class MaintenanceController {
   constructor(private readonly maintenanceService: MaintenanceService) {}
 
