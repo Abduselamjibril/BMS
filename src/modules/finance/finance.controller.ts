@@ -1,5 +1,6 @@
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Controller, Post, Body, UseGuards, Get, Query, Patch, Delete, Param, Req } from '@nestjs/common';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 // import { RolesGuard } from '../common/guards/roles.guard'; // Commented out if not present
@@ -19,6 +20,7 @@ export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
   @Get('invoices/all')
+  @Permissions('finance:invoices:all')
   @ApiOperation({ summary: 'List all invoices (no filters)' })
   @ApiResponse({ status: 200, description: 'All invoices.' })
   async getAllInvoices() {
@@ -32,6 +34,7 @@ export class FinanceController {
     }
 
     @Patch('payments/:id/verify')
+    @Permissions('finance:payments:verify')
     @ApiOperation({ summary: 'Verify payment slip and update invoice status' })
     @ApiResponse({ status: 200, description: 'Payment verified.' })
     @ApiParam({
@@ -65,6 +68,7 @@ export class FinanceController {
     }
 
     @Patch('tax-rules')
+    @Permissions('finance:tax_rules:update')
     @ApiOperation({ summary: 'Patch tax rules (VAT/Withholding)' })
     @ApiResponse({ status: 200, description: 'Tax rules patched.' })
     @ApiBody({ type: PatchTaxRulesDto })
@@ -74,6 +78,7 @@ export class FinanceController {
     }
 
     @Delete('invoices/:id')
+    @Permissions('finance:invoices:void')
     @ApiOperation({ summary: 'Void invoice (set status to CANCELLED)' })
     @ApiResponse({ status: 200, description: 'Invoice voided.' })
     @ApiParam({
@@ -87,6 +92,7 @@ export class FinanceController {
     }
 
   @Post('bank-accounts')
+  @Permissions('finance:bank_accounts:create')
   @ApiOperation({ summary: 'Create a bank account' })
   @ApiResponse({ status: 201, description: 'Bank account created.' })
   async createBankAccount(@Body() dto: CreateBankAccountDto) {
@@ -94,6 +100,7 @@ export class FinanceController {
   }
 
   @Post('invoices')
+  @Permissions('finance:invoices:create')
   @ApiOperation({ summary: 'Create an invoice' })
   @ApiResponse({ status: 201, description: 'Invoice created.' })
   async createInvoice(@Body() dto: CreateInvoiceDto) {
@@ -151,6 +158,7 @@ export class FinanceController {
   }
 
   @Post('invoices/generate')
+  @Permissions('finance:invoices:generate')
   @ApiOperation({ summary: 'Manually trigger BullMQ invoice generation' })
   @ApiResponse({ status: 200, description: 'Invoice generation triggered.' })
   async generateInvoices(@Body() data: { site_id?: string; building_id?: string }) {
@@ -159,6 +167,7 @@ export class FinanceController {
   }
 
   @Post('tax-rules')
+  @Permissions('finance:tax_rules:update')
   @ApiOperation({ summary: 'Update tax rules (VAT/Withholding)' })
   @ApiResponse({ status: 200, description: 'Tax rules updated.' })
   @ApiBody({
@@ -189,6 +198,7 @@ export class FinanceController {
   }
 
   @Get('reports/revenue')
+  @Permissions('finance:reports:revenue')
   @ApiOperation({ summary: 'Get revenue report' })
   @ApiResponse({ status: 200, description: 'Revenue report.' })
   async getRevenueReport(@Query('building_id') building_id?: string, @Query('month') month?: string) {
@@ -196,6 +206,7 @@ export class FinanceController {
   }
 
   @Get('reports/tax')
+  @Permissions('finance:reports:tax')
   @ApiOperation({ summary: 'Get tax compliance report' })
   @ApiResponse({ status: 200, description: 'Tax report.' })
   async getTaxReport(@Query('month') month?: string) {

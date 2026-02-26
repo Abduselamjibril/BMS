@@ -8,6 +8,7 @@ import { UtilityService } from './utility.service';
 import { CreateMeterDto } from './dto/create-meter.dto';
 import { CreateReadingDto } from './dto/create-reading.dto';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('utilities')
 @Controller('utilities')
@@ -16,12 +17,14 @@ export class UtilityController {
   constructor(private readonly utilityService: UtilityService) {}
 
   @Post('meters')
+  @Permissions('utilities:meters:create')
   @ApiOperation({ summary: 'Link a physical meter to a unit' })
   createMeter(@Body() dto: CreateMeterDto) {
     return this.utilityService.createMeter(dto);
   }
 
   @Get('meters')
+  @Permissions('utilities:meters:read')
   @ApiOperation({ summary: 'List meters; optional unit_id query' })
   findMeters(@Query('unit_id') unitId?: string) {
     return this.utilityService.findMeters(unitId);
@@ -60,6 +63,7 @@ export class UtilityController {
   }
 
   @Get('readings')
+  @Permissions('utilities:readings:read')
   @ApiOperation({ summary: 'List readings; optional meter_id query' })
   findReadings(@Query('meter_id') meterId?: string) {
     return this.utilityService.findReadings(meterId);

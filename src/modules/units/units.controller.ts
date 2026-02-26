@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, Query, UploadedFile, UseInterceptors, HttpException, HttpStatus } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -16,6 +17,7 @@ export class UnitsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a unit' })
+  @Permissions('units:create')
   create(@Body() dto: CreateUnitDto) {
     return this.unitsService.create(dto);
   }
@@ -41,18 +43,21 @@ export class UnitsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all units' })
+  @Permissions('units:read')
   findAll(@Query('building_id') buildingId?: string, @Query('status') status?: string) {
     return this.unitsService.findAll(buildingId, status);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get unit by id' })
+  @Permissions('units:read')
   findOne(@Param('id') id: string) {
     return this.unitsService.findOne(id);
   }
 
   @Get(':id/amenities')
   @ApiOperation({ summary: 'List amenities linked to unit' })
+  @Permissions('units:read')
   async getAmenities(@Param('id') unitId: string) {
     return this.unitsService.getAmenities(unitId);
   }
@@ -74,24 +79,28 @@ export class UnitsController {
     },
     type: require('./dto/create-unit.dto').CreateUnitDto
   })
+  @Permissions('units:update')
   update(@Param('id') id: string, @Body() dto: Partial<import('./dto/create-unit.dto').CreateUnitDto>) {
     return this.unitsService.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete unit by id' })
+  @Permissions('units:delete')
   remove(@Param('id') id: string) {
     return this.unitsService.remove(id);
   }
 
   @Post(':id/amenities')
   @ApiOperation({ summary: 'Link amenity to unit' })
+  @Permissions('units:amenities_link')
   addAmenity(@Param('id') unitId: string, @Body() dto: { amenityId: string }) {
     return this.unitsService.addAmenity(unitId, dto.amenityId);
   }
 
   @Delete(':id/amenities/:a_id')
   @ApiOperation({ summary: 'Remove amenity from unit' })
+  @Permissions('units:amenities_remove')
   removeAmenity(@Param('id') unitId: string, @Param('a_id') amenityId: string) {
     return this.unitsService.removeAmenity(unitId, amenityId);
   }

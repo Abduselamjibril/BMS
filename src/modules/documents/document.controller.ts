@@ -3,6 +3,7 @@ import { diskStorage } from 'multer';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { DocumentService } from './document.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 
@@ -13,6 +14,7 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Post('upload')
+  @Permissions('documents:upload')
   @ApiOperation({ summary: 'Upload document (hybrid storage)' })
   @ApiResponse({ status: 201, description: 'Document uploaded.' })
   @ApiConsumes('multipart/form-data')
@@ -53,6 +55,7 @@ export class DocumentController {
   }
 
   @Get('search')
+  @Permissions('documents:search')
   @ApiOperation({ summary: 'Search documents by module_type, name, or date' })
   @ApiResponse({ status: 200, description: 'Documents list.' })
   @ApiQuery({ name: 'module_type', required: false, description: 'Module type (lease, tenant, maintenance, payment)', example: 'lease' })
@@ -64,6 +67,7 @@ export class DocumentController {
   }
 
   @Get(':id/history')
+  @Permissions('documents:history')
   @ApiOperation({ summary: 'Get document version history' })
   @ApiResponse({ status: 200, description: 'Document history.' })
   async getDocumentHistory(@Param('id') id: string) {
@@ -71,6 +75,7 @@ export class DocumentController {
   }
 
   @Delete(':id')
+  @Permissions('documents:delete')
   @ApiOperation({ summary: 'Soft delete document' })
   @ApiResponse({ status: 200, description: 'Document deleted.' })
   async softDeleteDocument(@Param('id') id: string) {

@@ -19,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { LeasesService } from './leases.service';
 import { CreateLeaseDto } from './dto/create-lease.dto';
 import { RenewLeaseDto } from './dto/renew-lease.dto';
@@ -32,6 +33,7 @@ export class LeasesController {
   constructor(private readonly leasesService: LeasesService) {}
 
   @Post('leases')
+  @Permissions('leases:create')
   @ApiOperation({ summary: 'Create lease draft with overlap and vacancy checks' })
   async create(@Body() dto: CreateLeaseDto) {
     return this.leasesService.create(dto);
@@ -48,6 +50,7 @@ export class LeasesController {
   }
 
   @Patch('leases/:id/activate')
+  @Permissions('leases:activate')
   @ApiOperation({
     summary:
       'Activate lease transaction (set active, unit occupied, create occupancy history, lock overlap)',
@@ -57,12 +60,14 @@ export class LeasesController {
   }
 
   @Patch('leases/:id/terminate')
+  @Permissions('leases:terminate')
   @ApiOperation({ summary: 'Terminate lease and release unit occupancy' })
   async terminate(@Param('id') id: string, @Body() dto: TerminateLeaseDto) {
     return this.leasesService.terminate(id, dto);
   }
 
   @Post('leases/:id/renew')
+  @Permissions('leases:renew')
   @ApiOperation({ summary: 'Create renewed lease linked to previous lease' })
   async renew(@Param('id') id: string, @Body() dto: RenewLeaseDto) {
     return this.leasesService.renew(id, dto);

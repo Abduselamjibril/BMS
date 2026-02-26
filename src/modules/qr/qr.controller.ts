@@ -1,6 +1,7 @@
 import { Controller, Post, Param, UseGuards, Get, Req, Res, NotFoundException, Patch, Query } from '@nestjs/common';
 import { QrService } from './qr.service';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RoleName } from '../roles/entities/role.entity';
@@ -15,6 +16,7 @@ export class QrController {
 
   @Post('qr/generate/:unitId')
   @Auth()
+  @Permissions('qr:generate')
   @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Generate a QR token and return QR metadata (admin)' })
@@ -53,6 +55,7 @@ export class QrController {
 
   @Get('qr/analytics')
   @Auth()
+  @Permissions('qr:analytics')
   @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: QR analytics - top scanned QR codes' })
@@ -64,6 +67,7 @@ export class QrController {
 
   @Patch('qr/:id/deactivate')
   @Auth()
+  @Permissions('qr:deactivate')
   @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: deactivate a QR code by id' })
@@ -73,6 +77,7 @@ export class QrController {
 
   @Get('qr/export/pdf')
   @Auth()
+  @Permissions('qr:export_pdf')
   @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: export printable PDF sheets of QR codes' })

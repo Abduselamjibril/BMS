@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { MaintenanceService } from './maintenance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConsumes, ApiQuery } from '@nestjs/swagger';
@@ -68,6 +69,7 @@ export class MaintenanceController {
   }
 
   @Post('work-orders')
+  @Permissions('maintenance:work_orders:create')
   @ApiOperation({ summary: 'Convert request to work order and assign contractor' })
   @ApiResponse({ status: 201, description: 'Work order created.' })
   @ApiQuery({ name: 'assigned_by', required: true, description: 'User ID of the person assigning the work order (UUID)', example: 'f949849a-e94a-4130-8278-2825ac401e5c' })
@@ -92,6 +94,7 @@ export class MaintenanceController {
   }
 
   @Patch('work-orders/:id')
+  @Permissions('maintenance:work_orders:update')
   @ApiOperation({ summary: 'Update work order status (contractor only)' })
   @ApiResponse({ status: 200, description: 'Work order status updated.' })
   @ApiConsumes('multipart/form-data')
@@ -142,6 +145,7 @@ export class MaintenanceController {
   }
 
   @Get('reports')
+  @Permissions('maintenance:reports:read')
   @ApiOperation({ summary: 'Get maintenance KPIs and contractor performance' })
   @ApiResponse({ status: 200, description: 'Maintenance report.' })
   async getMaintenanceReport(@Query() query: any) {

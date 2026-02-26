@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Auth } from '../../common/decorators/auth.decorator';
@@ -12,6 +13,7 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get()
+  @Permissions('settings:read')
   @ApiOperation({ summary: 'Get organization settings' })
   @ApiResponse({ status: 200, description: 'Organization settings fetched.' })
   async getSettings() {
@@ -19,6 +21,7 @@ export class SettingsController {
   }
 
   @Patch()
+  @Permissions('settings:update')
   @ApiOperation({ summary: 'Update organization settings' })
   @ApiResponse({ status: 200, description: 'Organization settings updated.' })
   @ApiConsumes('multipart/form-data')

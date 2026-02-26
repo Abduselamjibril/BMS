@@ -19,6 +19,7 @@ async function bootstrap() {
     { name: 'super_admin', description: 'System Super Admin', type: 'system' },
     { name: 'admin', description: 'Organization Admin', type: 'system' },
     { name: 'site_admin', description: 'Site-level Admin', type: 'system' },
+    { name: 'contractor', description: 'Contractor', type: 'system' },
   ];
   // Ensure Postgres enum type contains our role names (safe: ignore errors)
   try {
@@ -56,6 +57,7 @@ async function bootstrap() {
     { code: 'visitors:read', description: 'Read visitors' },
     { code: 'visitors:update', description: 'Update visitors' },
     { code: 'visitors:delete', description: 'Delete visitors' },
+    { code: 'visitors:checkout', description: 'Checkout visitors' },
     { code: 'owners:create', description: 'Create owners' },
     { code: 'owners:read', description: 'Read owners' },
     { code: 'owners:update', description: 'Update owners' },
@@ -65,6 +67,26 @@ async function bootstrap() {
     { code: 'utilities:readings:create', description: 'Create meter readings' },
     { code: 'utilities:readings:read', description: 'Read meter readings' },
     { code: 'reports:view', description: 'View reports' },
+    // Reports
+    { code: 'reports:dashboard', description: 'View management dashboard KPIs' },
+    { code: 'reports:financial', description: 'View financial reports' },
+    { code: 'reports:occupancy', description: 'View occupancy reports' },
+    // Sites management
+    { code: 'sites:create', description: 'Create sites' },
+    { code: 'sites:read', description: 'Read sites' },
+    { code: 'sites:update', description: 'Update sites' },
+    { code: 'sites:delete', description: 'Delete sites' },
+    // Tenant applications / documents / announcements
+    { code: 'applications:review', description: 'Review tenant applications' },
+    { code: 'documents:verify', description: 'Verify or reject tenant documents' },
+    { code: 'announcements:create', description: 'Create announcements' },
+    // Building management
+    { code: 'buildings:create', description: 'Create buildings' },
+    { code: 'buildings:read', description: 'Read buildings' },
+    { code: 'buildings:update', description: 'Update buildings' },
+    { code: 'buildings:delete', description: 'Delete buildings' },
+    { code: 'buildings:assign_admin', description: 'Assign admin to building' },
+    { code: 'buildings:revoke_admin', description: 'Revoke admin from building' },
     // Role & Permission management
     { code: 'roles:create', description: 'Create roles' },
     { code: 'roles:read', description: 'Read roles' },
@@ -75,6 +97,59 @@ async function bootstrap() {
     { code: 'permissions:read', description: 'Read permissions' },
     { code: 'permissions:delete', description: 'Delete permissions' },
     { code: 'qr:manage', description: 'Manage QR codes' },
+    { code: 'qr:generate', description: 'Generate QR token' },
+    { code: 'qr:analytics', description: 'View QR analytics' },
+    { code: 'qr:deactivate', description: 'Deactivate QR codes' },
+    { code: 'qr:export_pdf', description: 'Export QR codes to PDF' },
+    // Messaging
+    { code: 'messages:send', description: 'Send messages to tenant' },
+    // Units management
+    { code: 'units:create', description: 'Create units' },
+    { code: 'units:read', description: 'Read units' },
+    { code: 'units:update', description: 'Update units' },
+    { code: 'units:delete', description: 'Delete units' },
+    { code: 'units:bulk_upload', description: 'Bulk upload units' },
+    { code: 'units:amenities_link', description: 'Link amenity to unit' },
+    { code: 'units:amenities_remove', description: 'Remove amenity from unit' },
+    // Amenities management
+    { code: 'amenities:create', description: 'Create amenities' },
+    { code: 'amenities:read', description: 'Read amenities' },
+    { code: 'amenities:update', description: 'Update amenities' },
+    { code: 'amenities:delete', description: 'Delete amenities' },
+    { code: 'amenities:link_building', description: 'Link amenity to building' },
+    { code: 'amenities:remove_building', description: 'Remove amenity from building' },
+    { code: 'amenities:link_unit', description: 'Link amenity to unit' },
+    { code: 'amenities:remove_unit', description: 'Remove amenity from unit' },
+    // Lease management
+    { code: 'leases:create', description: 'Create lease draft' },
+    { code: 'leases:activate', description: 'Activate lease' },
+    { code: 'leases:terminate', description: 'Terminate lease' },
+    { code: 'leases:renew', description: 'Renew lease' },
+    // Finance
+    { code: 'finance:invoices:create', description: 'Create invoices' },
+    { code: 'finance:invoices:all', description: 'List all invoices (admin)' },
+    { code: 'finance:payments:verify', description: 'Verify payments' },
+    { code: 'finance:tax_rules:update', description: 'Update tax rules' },
+    { code: 'finance:invoices:void', description: 'Void invoices' },
+    { code: 'finance:bank_accounts:create', description: 'Create bank accounts' },
+    { code: 'finance:invoices:generate', description: 'Trigger invoice generation' },
+    { code: 'finance:reports:revenue', description: 'View revenue reports' },
+    { code: 'finance:reports:tax', description: 'View tax reports' },
+    // Documents
+    { code: 'documents:delete', description: 'Soft delete documents' },
+    { code: 'documents:history', description: 'View document version history' },
+    { code: 'documents:search', description: 'Search documents across modules' },
+    { code: 'documents:upload', description: 'Upload documents' },
+    { code: 'settings:read', description: 'Read organization settings' },
+    { code: 'settings:update', description: 'Update organization settings' },
+    // Maintenance
+    { code: 'maintenance:requests:create', description: 'Submit maintenance requests' },
+    { code: 'maintenance:requests:read', description: 'Read maintenance requests' },
+    { code: 'maintenance:requests:update', description: 'Edit/cancel maintenance requests' },
+    { code: 'maintenance:work_orders:create', description: 'Create work orders from requests' },
+    { code: 'maintenance:work_orders:update', description: 'Update work order status (contractor)' },
+    { code: 'maintenance:feedback:create', description: 'Submit feedback for work orders' },
+    { code: 'maintenance:reports:read', description: 'Read maintenance KPIs and contractor performance' },
   ];
 
   const permRepo = app.get(getRepositoryToken(require('./src/modules/roles/entities/permission.entity').Permission));
@@ -109,9 +184,20 @@ async function bootstrap() {
     if (adminRole) {
       const adminPermCodes = [
         'users:create','users:read','users:update','users:delete',
-        'visitors:read','utilities:meters:read','utilities:readings:read',
+        'visitors:create','visitors:read','visitors:update','visitors:delete','visitors:checkout','utilities:meters:create','utilities:meters:read','utilities:readings:read',
         'owners:create','owners:read','owners:update',
-        'reports:view',
+        'buildings:create','buildings:read','buildings:update',
+        'sites:create','sites:read','sites:update','sites:delete',
+        'leases:create','leases:activate','leases:terminate','leases:renew',
+        'finance:invoices:create','finance:invoices:all','finance:payments:verify','finance:tax_rules:update','finance:invoices:void','finance:bank_accounts:create','finance:invoices:generate','finance:reports:revenue','finance:reports:tax',
+        'documents:delete','documents:history','documents:search',
+        'applications:review','documents:verify','announcements:create',
+        'units:create','units:read','units:update','units:delete','units:bulk_upload','units:amenities_link','units:amenities_remove',
+        'amenities:create','amenities:read','amenities:update','amenities:delete','amenities:link_building','amenities:remove_building','amenities:link_unit','amenities:remove_unit',
+        'reports:view','reports:dashboard','reports:financial','reports:occupancy',
+        'maintenance:requests:create','maintenance:requests:read','maintenance:requests:update','maintenance:work_orders:create','maintenance:work_orders:update','maintenance:feedback:create','maintenance:reports:read',
+        'qr:generate','qr:analytics','qr:deactivate','qr:export_pdf',
+        'settings:read','settings:update',
         // role/permission management (admin-level)
         'roles:read','roles:update','roles:assign_permissions','permissions:read'
       ];
@@ -128,6 +214,8 @@ async function bootstrap() {
       const sitePermCodes = [
         'visitors:create','visitors:read','visitors:update','visitors:delete','reports:view',
         'owners:read',
+        'buildings:read',
+        'sites:read','sites:update',
         // limited read access to permissions
         'permissions:read'
       ];
@@ -139,6 +227,22 @@ async function bootstrap() {
         }
       }
       console.log('Mapped default site_admin permissions');
+    }
+    // Map permissions for contractor role
+    const contractorRole = await roleRepo.findOne({ where: { name: 'contractor' } });
+    if (contractorRole) {
+      const contractorPermCodes = [
+        'maintenance:work_orders:update',
+        'maintenance:requests:read'
+      ];
+      for (const code of contractorPermCodes) {
+        const p = allPerms.find((x) => x.code === code);
+        if (p) {
+          const exists = await rolePermRepo.findOne({ where: { role: { id: contractorRole.id }, permission: { id: p.id } } });
+          if (!exists) await rolePermRepo.save({ role: contractorRole, permission: p });
+        }
+      }
+      console.log('Mapped default contractor permissions');
     }
   } catch (e) {
     console.warn('Could not map role permissions:', e.message || e);

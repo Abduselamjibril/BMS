@@ -18,6 +18,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Auth } from '../../common/decorators/auth.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { TenantsService } from './tenants.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { CreateTenantApplicationDto } from './dto/create-tenant-application.dto';
@@ -51,12 +52,14 @@ export class TenantsController {
   }
 
   @Get('applications/pending')
+  @Permissions('applications:review')
   @ApiOperation({ summary: 'List pending applications for admin review' })
   async pendingApplications() {
     return this.tenantsService.listPendingApplications();
   }
 
   @Patch('documents/:id/verify')
+  @Permissions('documents:verify')
   @ApiOperation({ summary: 'Verify or reject tenant document' })
   async verifyDocument(@Param('id') id: string, @Body() dto: VerifyDocumentDto) {
     return this.tenantsService.verifyDocument(id, dto);
@@ -123,6 +126,7 @@ export class TenantsController {
   }
 
   @Post('announcements')
+  @Permissions('announcements:create')
   @ApiOperation({ summary: 'Create announcement for all/building/site' })
   async createAnnouncement(@Body() dto: CreateAnnouncementDto, @Req() req: any) {
     return this.tenantsService.createAnnouncement(dto, req.user.id);
@@ -140,6 +144,7 @@ export class TenantsController {
   }
 
   @Post('messages')
+  @Permissions('messages:send')
   @ApiOperation({ summary: 'Send direct message to tenant' })
   async sendMessage(@Body() dto: SendMessageDto, @Req() req: any) {
     return this.tenantsService.sendMessage(dto, req.user.id);
