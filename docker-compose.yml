@@ -1,38 +1,58 @@
 version: '3.8'
+
 services:
-  nestjs:
-    build: .
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bms_api
     ports:
-      - "2546:2546"
-    environment:
-      - PORT=2546
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_NAME=nestjs_db
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
     depends_on:
-      - postgres
-  postgres:
-    image: postgres:15-alpine
+      db:
+        condition: service_healthy
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nestjs_db
+    networks:
+      - bms-net
+
+  db:
+    image: postgres:15-alpine
+    container_name: bms_db
     ports:
-      - "5432:5432"
+      - "${DB_PORT_EXTERNAL}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - bms_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bms-net
+
   pgadmin:
     image: dpage/pgadmin4
+    container_name: bms_pgadmin
     restart: always
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
-      - "5050:80"
+      - "${PGADMIN_PORT}:80"
     depends_on:
-      - postgres
+      - db
+    networks:
+      - bms-net
+
+networks:
+  bms-net:
+    driver: bridge
+
 volumes:
-  pgdata:
+  bms_pgdata:
