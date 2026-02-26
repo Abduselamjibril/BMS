@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, Patch, Delete } from '@nestjs/common';
+import { AssignRoleDto } from './dto/assign-role.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { UsersService } from './users.service';
@@ -71,5 +72,13 @@ export class UsersController {
   @Permissions('users:delete')
   async remove(@Param('id') id: string) {
     return this.usersService.softDelete(id);
+  }
+
+  @Post('assign-role')
+  @ApiOperation({ summary: 'Assign a role to a user' })
+  @ApiResponse({ status: 201, description: 'Role assigned to user.' })
+  @Permissions('users:update')
+  async assignRole(@Body() assignRoleDto: AssignRoleDto) {
+    return this.usersService.assignRole(assignRoleDto);
   }
 }

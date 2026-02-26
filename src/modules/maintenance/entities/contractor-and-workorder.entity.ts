@@ -30,8 +30,8 @@ export class WorkOrder {
   @ManyToOne(() => MaintenanceRequest, { nullable: false })
   request!: MaintenanceRequest;
 
-  @Column({ nullable: false })
-  contractor_id!: string;
+  @ManyToOne(() => Contractor, { nullable: false })
+  contractor!: Contractor;
 
   @Column({ nullable: false })
   assigned_by!: string;
@@ -53,4 +53,7 @@ export class WorkOrder {
 
   @Column({ length: 20, default: 'assigned' })
   status!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  proofUrl?: string;
 }

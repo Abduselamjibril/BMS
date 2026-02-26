@@ -8,6 +8,7 @@ export enum RoleName {
   NOMINEE_ADMIN = 'nominee_admin',
   ADMIN = 'admin',
   SITE_ADMIN = 'site_admin',
+  CONTRACTOR = 'contractor',
 }
 
 export enum RoleType {

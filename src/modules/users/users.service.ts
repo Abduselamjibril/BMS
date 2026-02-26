@@ -6,12 +6,16 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserStatus } from './entities/user.entity';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
+
+import { User, UserStatus } from './entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
+import { Contractor } from '../maintenance/entities/contractor-and-workorder.entity';
+
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { AssignRoleDto } from './dto/assign-role.dto';
 
 @Injectable()
 export class UsersService {
@@ -22,8 +26,13 @@ export class UsersService {
     private readonly roleRepository: Repository<Role>,
     @InjectRepository(UserRole)
     private readonly userRoleRepository: Repository<UserRole>,
+    @InjectRepository(Contractor)
+    private readonly contractorRepository: Repository<Contractor>,
   ) {}
 
+  /**
+   * CREATE A NEW USER
+   */
   async create(createUserDto: CreateUserDto): Promise<User> {
     const existing = await this.userRepository.findOne({ 
       where: { email: createUserDto.email } 
@@ -41,19 +50,72 @@ export class UsersService {
       status: createUserDto.status ?? UserStatus.ACTIVE,
     });
 
-    const saved = await this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
 
-    // If role_id provided, validate and create UserRole link
+    // If role_id is provided, validate role existence and link to UserRole
     if (createUserDto.role_id) {
       const role = await this.roleRepository.findOne({ where: { id: createUserDto.role_id } });
-      if (!role) throw new BadRequestException('role_id is invalid');
-      const ur = this.userRoleRepository.create({ user: saved as any, role: role as any });
-      await this.userRoleRepository.save(ur);
+      if (!role) {
+        throw new BadRequestException('The provided role_id is invalid');
+      }
+      
+      const userRole = this.userRoleRepository.create({ 
+        user: savedUser, 
+        role: role 
+      });
+      await this.userRoleRepository.save(userRole);
     }
 
-    return saved;
+    return savedUser;
   }
 
+  /**
+   * ROLE ASSIGNMENT
+   */
+  async assignRole(dto: AssignRoleDto) {
+    const user = await this.userRepository.findOne({ where: { id: dto.user_id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const role = await this.roleRepository.findOne({ where: { id: dto.role_id } });
+    if (!role) throw new NotFoundException('Role not found');
+
+    // Check if the user already has this role
+    const existing = await this.userRoleRepository.findOne({ 
+      where: { 
+        user: { id: dto.user_id }, 
+        role: { id: dto.role_id } 
+      } 
+    });
+
+    let roleAssigned = false;
+    if (!existing) {
+      const userRole = this.userRoleRepository.create({ user, role });
+      await this.userRoleRepository.save(userRole);
+      roleAssigned = true;
+    }
+
+    // Always check and create Contractor entity if user has contractor role
+    if (role.name === 'contractor') {
+      const contractorExists = await this.contractorRepository.findOne({ where: { id: user.id } });
+      if (!contractorExists) {
+        const contractor = this.contractorRepository.create({
+          id: user.id,
+          name: user.name,
+          phone: '',
+          specialization: '',
+          rating: 0,
+          status: 'active'
+        });
+        await this.contractorRepository.save(contractor);
+      }
+    }
+
+    return { message: roleAssigned ? 'Role assigned successfully to user' : 'User already has this role, contractor entity ensured' };
+  }
+
+  /**
+   * RETRIEVAL METHODS
+   */
   async findAll(): Promise<User[]> {
     return this.userRepository.find();
   }
@@ -70,19 +132,20 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * UPDATES AND STATUS MANAGEMENT
+   */
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.findById(id);
 
-    // If a password is provided in the update DTO, hash it before saving
+    // Handle password hashing if the password is being updated
     if (dto.password) {
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
-      // Map the DTO password to the entity password_hash field
-      (user as any).password_hash = hashedPassword;
-      // Remove the plain password from the DTO so Object.assign doesn't overwrite
+      user.password_hash = await bcrypt.hash(dto.password, 10);
+      // Remove plain password from DTO to prevent it from being mapped to a non-existent field
       delete dto.password;
     }
 
-    // Merge other updates
+    // Merge other updates into the existing user object
     Object.assign(user, dto);
     
     return this.userRepository.save(user);
@@ -100,15 +163,21 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
+  /**
+   * HARD DELETE
+   */
   async remove(id: string): Promise<{ message: string }> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
-      return { message: 'User not found or already deleted.' };
+      throw new NotFoundException('User not found or already deleted');
     }
     await this.userRepository.delete(id);
     return { message: 'User deleted successfully.' };
   }
 
+  /**
+   * DIRECT SAVE HELPER
+   */
   async save(user: User): Promise<User> {
     return this.userRepository.save(user);
   }

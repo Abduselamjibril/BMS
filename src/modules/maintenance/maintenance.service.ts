@@ -23,7 +23,12 @@ export class MaintenanceService {
 
   async submitRequest(dto: any) {
     // Validate tenant/unit, create request
-    return this.requestRepo.save(dto);
+    const { tenantId, unit_id, ...rest } = dto;
+    return this.requestRepo.save({
+      ...rest,
+      tenant: { id: tenantId },
+      unit: { id: unit_id }
+    });
   }
 
   async getRequests(user: any) {
@@ -58,15 +63,26 @@ export class MaintenanceService {
 
   async convertToWorkOrder(dto: any) {
     // Convert request to work order, assign contractor
-    return this.workOrderRepo.save(dto);
+    const { assigned_by, request_id, contractor_id, scheduled_date } = dto;
+    return this.workOrderRepo.save({
+      assigned_by,
+      contractor: { id: contractor_id },
+      scheduled_date,
+      request: { id: request_id }
+    });
   }
 
-  async updateWorkOrderStatus(id: string, status: string, proofUrl?: string) {
+  async updateWorkOrderStatus(id: string, status: string, proof?: Express.Multer.File) {
     // Prevent 'completed' status if no proof photo
-    if (status === 'completed' && !proofUrl) {
+    if (status === 'completed' && !proof) {
       throw new BadRequestException('A proof of completion photo is required.');
     }
-    return this.workOrderRepo.update(id, { status });
+    // Optionally, save proof file info (e.g., filename) to work order
+    const updateData: any = { status };
+    if (proof) {
+      updateData.proofUrl = proof.path || proof.originalname;
+    }
+    return this.workOrderRepo.update(id, updateData);
   }
 
   async trackSLA(id: string) {
@@ -128,7 +144,7 @@ export class MaintenanceService {
     const contractors = await this.contractorRepo.find();
     const contractorStats = await Promise.all(contractors.map(async (contractor) => {
       const orders = await this.workOrderRepo.find({
-        where: { contractor_id: contractor.id, status: 'completed' },
+        where: { contractor: { id: contractor.id }, status: 'completed' },
       });
 
       const avgCost = orders.length
