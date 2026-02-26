@@ -1,23 +1,28 @@
-# Use official Node.js LTS image as the base
+# 1. Use official Node.js LTS image as the base
 FROM node:18-alpine
 
-# Set working directory
+# 2. Set working directory inside the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json
+# 3. Copy package files first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies like NestJS CLI)
+# 4. Install ALL dependencies (including NestJS CLI needed for the build)
+# We do NOT use --production here because we need the build tools
 RUN npm install
 
-# Copy the rest of the application code
+# 5. Copy the rest of the application source code
 COPY . .
 
-# Build the TypeScript code
+# 6. Build the TypeScript code into JavaScript
+# This creates the 'dist' folder
 RUN npm run build
 
-# Expose the application port (Matches the port in your .env)
+# 7. Expose the application port 
+# (Matches the PORT=2546 in your .env)
 EXPOSE 2546
 
-# Start the NestJS application
-CMD ["npm", "run", "start:prod"]
+# 8. Start the application
+# We use 'node dist/src/main' because your build output 
+# puts the entry point inside a 'src' subfolder.
+CMD ["node", "dist/src/main"]
