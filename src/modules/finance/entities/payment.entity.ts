@@ -1,3 +1,4 @@
+import { CreateDateColumn } from 'typeorm';
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Invoice } from './invoice.entity';
 
@@ -26,4 +27,7 @@ export class Payment {
 
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status!: PaymentStatus;
+
+  @CreateDateColumn()
+  created_at!: Date;
 }

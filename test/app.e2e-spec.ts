@@ -22,4 +22,19 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect('Hello World!');
   });
+  it('/documents/upload (POST) - upload document', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/documents/upload')
+      .field('module_type', 'lease')
+      .field('module_id', 'test-lease-id')
+      .attach('file', Buffer.from('dummy file content'), {
+        filename: 'testfile.txt',
+        contentType: 'text/plain',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('id');
+    expect(res.body.file_name).toBe('testfile.txt');
+    expect(res.body.module_type).toBe('lease');
+    expect(res.body.module_id).toBe('test-lease-id');
+  });
 });

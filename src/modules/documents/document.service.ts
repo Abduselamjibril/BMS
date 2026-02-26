@@ -48,6 +48,8 @@ export class DocumentService {
   }
 
   async searchDocuments(filters: any) {
+    // Always exclude deleted documents
+    const baseFilters = { ...filters, is_deleted: false };
     // Scoped access: nominee admins only see docs for assigned buildings
     if (filters.user && filters.user.role === 'nominee_admin') {
       // Find assigned buildings
@@ -55,11 +57,11 @@ export class DocumentService {
       const buildingIds = assignments.map(a => a.building.id);
       // Filter documents for these buildings
       return this.documentRepo.createQueryBuilder('document')
-        .where('document.module_type = :moduleType AND document.module_id IN (:...buildingIds)', { moduleType: 'building', buildingIds })
+        .where('document.module_type = :moduleType AND document.module_id IN (:...buildingIds) AND document.is_deleted = false', { moduleType: 'building', buildingIds })
         .getMany();
     }
     // Tenants and super admins: fallback to filters
-    return this.documentRepo.find({ where: filters });
+    return this.documentRepo.find({ where: baseFilters });
   }
 
   async getDocumentHistory(id: string) {
