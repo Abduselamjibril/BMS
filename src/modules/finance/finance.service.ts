@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { BankAccount } from './entities/bank-account.entity';
@@ -26,6 +28,7 @@ export class FinanceService {
     @InjectRepository(DepositAdvice)
     private readonly depositAdviceRepo: Repository<DepositAdvice>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -153,11 +156,21 @@ export class FinanceService {
     // Update the payment record
     const updatedPayment = await this.paymentRepo.save(payment);
 
-    // If payment is confirmed, mark the associated invoice as PAID
+    // If payment is confirmed, mark the associated invoice as PAID and notify tenant
     if (dto.status === 'confirmed' && payment.invoice) {
       const invoice = payment.invoice;
       invoice.status = InvoiceStatus.PAID;
       await this.invoiceRepo.save(invoice);
+      // Notify tenant
+      if (invoice.tenant) {
+        await this.notificationsService.notify(
+          invoice.tenant.id,
+          'Payment Confirmed',
+          `Your payment for invoice #${invoice.invoice_no} has been verified. Thank you!`,
+          NotificationType.FINANCE,
+          { invoiceId: invoice.id, paymentId: payment.id }
+        );
+      }
     }
 
     return updatedPayment;

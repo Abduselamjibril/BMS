@@ -16,6 +16,8 @@ import {
 import { TenantDocument } from './entities/tenant-document.entity';
 import { Message } from './entities/message.entity';
 import { Announcement, AnnouncementTarget } from './entities/announcement.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { User, UserStatus } from '../users/entities/user.entity';
 import { Unit, UnitStatus } from '../units/entities/unit.entity';
 import { Building } from '../buildings/entities/building.entity';
@@ -44,6 +46,8 @@ export class TenantsService {
     private readonly announcementRepository: Repository<Announcement>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(require('../leases/entities/lease.entity').Lease)
+    private readonly leaseRepository: Repository<any>,
     @InjectRepository(Unit)
     private readonly unitRepository: Repository<Unit>,
     @InjectRepository(Building)
@@ -52,6 +56,7 @@ export class TenantsService {
     private readonly siteRepository: Repository<Site>,
     @InjectRepository(UserRole)
     private readonly userRoleRepository: Repository<UserRole>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async register(dto: RegisterTenantDto): Promise<Tenant> {
@@ -258,7 +263,35 @@ export class TenantsService {
       created_by: creator,
     });
 
-    return this.announcementRepository.save(announcement);
+    const savedAnnouncement = await this.announcementRepository.save(announcement);
+
+    // Bulk notify users based on target
+    let userIds: string[] = [];
+    if (dto.target === AnnouncementTarget.BUILDING && dto.building_id) {
+      // Find all tenants in the building via active leases
+      const leases = await this.leaseRepository.find({ where: { building: { id: dto.building_id }, status: 'active' }, relations: ['tenant'] });
+      userIds = leases.map(l => l.tenant.id);
+    } else if (dto.target === AnnouncementTarget.SITE && dto.site_id) {
+      // Find all tenants in the site via active leases
+      const buildings = await this.buildingRepository.find({ where: { site: { id: dto.site_id } } });
+      const buildingIds = buildings.map(b => b.id);
+      const leases = await this.leaseRepository.find({ where: { building: { id: In(buildingIds) }, status: 'active' }, relations: ['tenant'] });
+      userIds = leases.map(l => l.tenant.id);
+    } else if (dto.target === AnnouncementTarget.ALL) {
+      // All tenants
+      const tenants = await this.tenantRepository.find();
+      userIds = tenants.map(t => t.id);
+    }
+    for (const userId of userIds) {
+      await this.notificationsService.notify(
+        userId,
+        'Announcement',
+        dto.title + '\n' + dto.message,
+        NotificationType.ANNOUNCEMENT,
+        { announcementId: savedAnnouncement.id, target: dto.target }
+      );
+    }
+    return savedAnnouncement;
   }
 
   async findAnnouncements(siteId?: string, buildingId?: string): Promise<any[]> {

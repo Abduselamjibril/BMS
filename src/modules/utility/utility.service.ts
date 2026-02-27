@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UtilityMeter } from './entities/utility-meter.entity';
@@ -9,6 +11,45 @@ import { Unit } from '../units/entities/unit.entity';
 
 @Injectable()
 export class UtilityService {
+
+    /**
+     * Returns units/meters with abnormal consumption (e.g., >2x previous average)
+     */
+    async getUtilityLeaks() {
+      // Find all meters
+      const meters = await this.meterRepo.find();
+      const leaks: Array<{
+        meter_id: string;
+        unit_id: string;
+        latest_reading: number;
+        previous_avg: number;
+        spike_ratio: number;
+      }> = [];
+      for (const meter of meters) {
+        // Get last 4 readings (sorted by date desc)
+        const readings = await this.readingRepo.find({
+          where: { meter_id: meter.id },
+          order: { reading_date: 'DESC' },
+          take: 4,
+        });
+        if (readings.length < 2) continue;
+        // Calculate average of previous readings (excluding latest)
+        const prev = readings.slice(1);
+        const prevAvg = prev.reduce((sum, r) => sum + Number(r.reading_value), 0) / prev.length;
+        const latest = readings[0];
+        if (prevAvg > 0 && Number(latest.reading_value) > 2 * prevAvg) {
+          // Abnormal spike detected
+          leaks.push({
+            meter_id: meter.id,
+            unit_id: meter.unit_id,
+            latest_reading: Number(latest.reading_value),
+            previous_avg: prevAvg,
+            spike_ratio: Number(latest.reading_value) / prevAvg,
+          });
+        }
+      }
+      return leaks;
+    }
   constructor(
     @InjectRepository(UtilityMeter)
     private readonly meterRepo: Repository<UtilityMeter>,
@@ -16,6 +57,9 @@ export class UtilityService {
     private readonly readingRepo: Repository<MeterReading>,
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(require('../leases/entities/lease.entity').Lease)
+    private readonly leaseRepo: Repository<any>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   createMeter(dto: CreateMeterDto) {
@@ -47,13 +91,34 @@ export class UtilityService {
     const meter = await this.meterRepo.findOne({ where: { id: dto.meter_id } });
     if (!meter) throw new NotFoundException('Meter not found');
     const readingDate = dto.reading_date ? new Date(dto.reading_date) : new Date();
-    const r = this.readingRepo.create({
+    const r: MeterReading = this.readingRepo.create({
       meter_id: dto.meter_id,
       reading_value: dto.reading_value,
       reading_date: readingDate,
       photo_url: dto.photo_url,
-    } as any);
-    return this.readingRepo.save(r);
+    });
+    const savedReading: MeterReading = await this.readingRepo.save(r);
+
+    // Find tenant for the unit via active lease
+    const activeLease = await this.getActiveLeaseForUnit(meter.unit_id);
+    if (activeLease && activeLease.tenant) {
+      await this.notificationsService.notify(
+        activeLease.tenant.id,
+        'New Utility Reading',
+        `Your ${meter.type} meter reading of ${dto.reading_value} was recorded on ${readingDate.toLocaleDateString()}.`,
+        NotificationType.UTILITY,
+        { meterId: meter.id, readingId: savedReading.id, value: dto.reading_value, photo: dto.photo_url }
+      );
+    }
+    return savedReading;
+  }
+
+  // Helper to get active lease for unit
+  private async getActiveLeaseForUnit(unitId: string) {
+    return this.leaseRepo.findOne({
+      where: { unit: { id: unitId }, status: 'active' },
+      relations: ['tenant'],
+    });
   }
 
   findReadings(meterId?: string) {

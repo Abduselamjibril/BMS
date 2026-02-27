@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Main NestJS API
   api:
     build:
       context: .
@@ -13,10 +14,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: always
     networks:
       - bms-net
 
+  # PostgreSQL Database
   db:
     image: postgres:15-alpine
     container_name: bms_db
@@ -36,6 +40,7 @@ services:
     networks:
       - bms-net
 
+  # Database Management Tool
   pgadmin:
     image: dpage/pgadmin4
     container_name: bms_pgadmin
@@ -49,6 +54,17 @@ services:
       - db
     networks:
       - bms-net
+
+  # Redis for Caching/Queues
+  redis:
+    image: redis:7-alpine
+    container_name: bms_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bms-net
+
+  # Firebase Emulator for Local Development
 
 networks:
   bms-net:

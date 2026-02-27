@@ -1,9 +1,19 @@
-import { Controller, Post, Body, Get, Query, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { 
+  Controller, 
+  Post, 
+  Body, 
+  Get, 
+  Query, 
+  Param, 
+  UseInterceptors, 
+  UploadedFile 
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+
 import { UtilityService } from './utility.service';
 import { CreateMeterDto } from './dto/create-meter.dto';
 import { CreateReadingDto } from './dto/create-reading.dto';
@@ -16,21 +26,29 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 export class UtilityController {
   constructor(private readonly utilityService: UtilityService) {}
 
+  @Get('/alerts/utility-leaks')
+  @Permissions('utilities:alerts:read')
+  @ApiOperation({ summary: 'List units/meters with abnormal utility consumption (possible leaks)' })
+  async getUtilityLeaks() {
+    return this.utilityService.getUtilityLeaks();
+  }
+
   @Post('meters')
   @Permissions('utilities:meters:create')
   @ApiOperation({ summary: 'Link a physical meter to a unit' })
-  createMeter(@Body() dto: CreateMeterDto) {
+  async createMeter(@Body() dto: CreateMeterDto) {
     return this.utilityService.createMeter(dto);
   }
 
   @Get('meters')
   @Permissions('utilities:meters:read')
   @ApiOperation({ summary: 'List meters; optional unit_id query' })
-  findMeters(@Query('unit_id') unitId?: string) {
+  async findMeters(@Query('unit_id') unitId?: string) {
     return this.utilityService.findMeters(unitId);
   }
 
   @Post('readings')
+  @Permissions('utilities:readings:create')
   @ApiOperation({ summary: 'Record a meter reading (accepts optional photo multipart)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -48,24 +66,38 @@ export class UtilityController {
   @UseInterceptors(FileInterceptor('photo', {
     storage: diskStorage({
       destination: './uploads/meters',
-      filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}${extname(file.originalname)}`),
+      filename: (req, file, cb) => {
+        const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
+        cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      },
     }),
   }))
-  async createReading(@UploadedFile() file: Express.Multer.File | undefined, @Body() body: any) {
-    const b = body || {};
+  async createReading(
+    @UploadedFile() file: Express.Multer.File | undefined, 
+    @Body() body: any
+  ) {
+    // Manually constructing DTO from multipart body as numbers/dates might come as strings
     const dto: CreateReadingDto = {
-      meter_id: b.meter_id,
-      reading_value: b.reading_value !== undefined ? Number(b.reading_value) : undefined,
-      reading_date: b.reading_date,
-      photo_url: file ? file.path : b.photo_url,
-    } as any;
+      meter_id: body.meter_id,
+      reading_value: body.reading_value !== undefined ? Number(body.reading_value) : undefined,
+      reading_date: body.reading_date,
+      photo_url: file ? file.path : body.photo_url,
+    } as CreateReadingDto;
+
     return this.utilityService.createReading(dto);
   }
 
   @Get('readings')
   @Permissions('utilities:readings:read')
   @ApiOperation({ summary: 'List readings; optional meter_id query' })
-  findReadings(@Query('meter_id') meterId?: string) {
+  async findReadings(@Query('meter_id') meterId?: string) {
     return this.utilityService.findReadings(meterId);
+  }
+
+  @Get('meters/:id')
+  @Permissions('utilities:meters:read')
+  @ApiOperation({ summary: 'Get details for a specific meter' })
+  async findMeter(@Param('id') id: string) {
+    return this.utilityService.findMeter(id);
   }
 }

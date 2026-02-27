@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MaintenanceRequest, MaintenanceStatus } from './entities/maintenance-request.entity';
@@ -19,6 +21,7 @@ export class MaintenanceService {
     private readonly feedbackRepo: Repository<MaintenanceFeedback>,
     @InjectRepository(UserBuilding)
     private readonly userBuildingRepo: Repository<UserBuilding>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async submitRequest(dto: any) {
@@ -82,7 +85,41 @@ export class MaintenanceService {
     if (proof) {
       updateData.proofUrl = proof.path || proof.originalname;
     }
-    return this.workOrderRepo.update(id, updateData);
+    const result = await this.workOrderRepo.update(id, updateData);
+
+    // Fetch work order and related entities for notification
+    const workOrder = await this.workOrderRepo.findOne({
+      where: { id },
+      relations: ['request', 'request.tenant', 'contractor'],
+    });
+    if (!workOrder) return result;
+
+    // Status-based notifications
+    if (status === 'in_progress') {
+      // Notify tenant
+      if (workOrder.request && workOrder.request.tenant) {
+        await this.notificationsService.notify(
+          workOrder.request.tenant.id,
+          'Maintenance Started',
+          'A technician has started working on your maintenance request.',
+          NotificationType.MAINTENANCE,
+          { workOrderId: workOrder.id, requestId: workOrder.request.id }
+        );
+      }
+    }
+    if (status === 'completed') {
+      // Notify tenant
+      if (workOrder.request && workOrder.request.tenant) {
+        await this.notificationsService.notify(
+          workOrder.request.tenant.id,
+          'Maintenance Completed',
+          'Your maintenance request has been completed. Please review and rate the service.',
+          NotificationType.MAINTENANCE,
+          { workOrderId: workOrder.id, requestId: workOrder.request.id, proof: updateData.proofUrl }
+        );
+      }
+    }
+    return result;
   }
 
   async trackSLA(id: string) {

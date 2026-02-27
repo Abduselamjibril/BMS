@@ -27,6 +27,7 @@ import { QrModule } from './modules/qr/qr.module';
 import { VisitorsModule } from './modules/visitors/visitors.module';
 import { UtilityModule } from './modules/utility/utility.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AutomationsModule } from './modules/automations/automations.module';
 import { TypeOrmModule as FeatureTypeOrmModule } from '@nestjs/typeorm';
 import { UserRole } from './modules/roles/entities/user-role.entity';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -77,6 +78,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     NotificationsModule,
     // Reports module (Phase 5)
     ReportsModule,
+    // Automations module (Phase: Scheduled Cron Jobs)
+    AutomationsModule,
   ],
   controllers: [AppController],
   providers: [AppService, RolesGuard],

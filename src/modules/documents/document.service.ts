@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DataSource } from 'typeorm';
@@ -12,6 +14,7 @@ export class DocumentService {
     @InjectRepository(DocumentVersion)
     private readonly versionRepo: Repository<DocumentVersion>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async uploadDocument(dto: any, file: Express.Multer.File) {
@@ -26,7 +29,19 @@ export class DocumentService {
       version: 1,
       is_deleted: false,
     });
-    return this.documentRepo.save(doc);
+    const savedDoc = await this.documentRepo.save(doc);
+
+    // Notify manager/admin if document is uploaded for compliance
+    if (dto.module_type === 'tenant' && dto.manager_id) {
+      await this.notificationsService.notify(
+        dto.manager_id,
+        'Document Uploaded',
+        `A new document has been uploaded by tenant ${dto.tenant_id}.`,
+        NotificationType.SYSTEM,
+        { documentId: savedDoc.id, tenantId: dto.tenant_id }
+      );
+    }
+    return savedDoc;
   }
 
   async updateDocument(id: string, file: Express.Multer.File) {

@@ -40,3 +40,5 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 2546);
 }
 bootstrap();
+// Fix ReferenceError: crypto is not defined
+global.crypto = require('crypto');

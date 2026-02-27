@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Visitor } from './entities/visitor.entity';
@@ -6,6 +8,7 @@ import { CreateVisitorDto } from './dto/create-visitor.dto';
 import { UpdateVisitorDto } from './dto/update-visitor.dto';
 import { Site } from '../sites/entities/site.entity';
 import { Unit } from '../units/entities/unit.entity';
+import { VisitorStatus } from './entities/visitor.entity';
 
 @Injectable()
 export class VisitorsService {
@@ -16,6 +19,9 @@ export class VisitorsService {
     private readonly siteRepo: Repository<Site>,
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(require('../leases/entities/lease.entity').Lease)
+    private readonly leaseRepository: Repository<any>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateVisitorDto) {
@@ -42,12 +48,28 @@ export class VisitorsService {
       }
     }
 
-    const v = this.visitorRepo.create({
+    const v: Visitor = this.visitorRepo.create({
       ...dto,
       check_in_time: new Date(),
-      status: 'in',
-    } as any);
-    return this.visitorRepo.save(v);
+      status: VisitorStatus.IN,
+    });
+    const savedVisitor: Visitor = await this.visitorRepo.save(v);
+
+    // Notify tenant if unit_id is provided
+    if (dto.unit_id) {
+      // Find tenant for the unit via active lease
+      const lease = await this.leaseRepository.findOne({ where: { unit: { id: dto.unit_id }, status: 'active' }, relations: ['tenant'] });
+      if (lease && lease.tenant) {
+        await this.notificationsService.notify(
+          lease.tenant.id,
+          'Visitor Check-In',
+          `Visitor ${dto.visitor_name} has checked in to see you.`,
+          NotificationType.VISITOR,
+          { visitorId: savedVisitor.id, unitId: dto.unit_id, siteId: dto.site_id }
+        );
+      }
+    }
+    return savedVisitor;
   }
 
   findAll(siteId?: string) {

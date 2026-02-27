@@ -12,6 +12,8 @@ import { Unit } from '../units/entities/unit.entity';
 import { Building } from '../buildings/entities/building.entity';
 import { Site } from '../sites/entities/site.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
+import { Lease } from '../leases/entities/lease.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -26,7 +28,9 @@ import { UserRole } from '../roles/entities/user-role.entity';
       Building,
       Site,
       UserRole,
+      Lease,
     ]),
+    NotificationsModule,
   ],
   controllers: [TenantsController],
   providers: [TenantsService],

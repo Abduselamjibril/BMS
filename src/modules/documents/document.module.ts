@@ -4,6 +4,7 @@ import { Document } from './entities/document.entity';
 import { DocumentVersion } from './entities/document.entity';
 import { DocumentService } from './document.service';
 import { DocumentController } from './document.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { DocumentController } from './document.controller';
       Document,
       DocumentVersion,
     ]),
+    NotificationsModule,
   ],
   providers: [DocumentService],
   controllers: [DocumentController],

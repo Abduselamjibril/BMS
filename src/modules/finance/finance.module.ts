@@ -8,6 +8,7 @@ import { Invoice } from './entities/invoice.entity';
 import { InvoiceItem } from './entities/invoice-item.entity';
 import { Payment } from './entities/payment.entity';
 import { DepositAdvice } from './entities/deposit-advice.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DepositAdvice } from './entities/deposit-advice.entity';
       Payment,
       DepositAdvice,
     ]),
+    NotificationsModule,
     BullModule.registerQueue({
       name: 'monthly-invoice',
     }),

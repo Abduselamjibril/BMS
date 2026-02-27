@@ -6,6 +6,7 @@ import { MaintenanceFeedback } from './entities/maintenance-feedback.entity';
 import { MaintenanceService } from './maintenance.service';
 import { MaintenanceController } from './maintenance.controller';
 import { UserBuilding } from '../users/entities/user-building.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UserBuilding } from '../users/entities/user-building.entity';
       MaintenanceFeedback,
       UserBuilding,
     ]),
+    NotificationsModule,
   ],
   providers: [MaintenanceService],
   exports: [MaintenanceService],
