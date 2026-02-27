@@ -20,4 +20,5 @@ Thumbs.db
 
 # Build
 build/
+src/config/firebase-service-account.json
 
