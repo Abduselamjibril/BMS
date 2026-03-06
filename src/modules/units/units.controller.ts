@@ -7,7 +7,7 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { UnitsService } from './units.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiResponse, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('Units')
 @Controller('units')
@@ -43,6 +43,8 @@ export class UnitsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all units' })
+  @ApiQuery({ name: 'building_id', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
   @Permissions('units:read')
   findAll(@Query('building_id') buildingId?: string, @Query('status') status?: string) {
     return this.unitsService.findAll(buildingId, status);
