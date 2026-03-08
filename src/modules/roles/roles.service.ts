@@ -19,6 +19,9 @@ export class RolesService {
   ) {}
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
+    if (createRoleDto.name === 'super_admin') {
+      throw new ConflictException('The super_admin role is system-protected and cannot be created manually.');
+    }
     const exists = await this.roleRepository.findOne({ where: { name: createRoleDto.name } });
     if (exists) throw new ConflictException('Role already exists');
     const role = this.roleRepository.create(createRoleDto);
@@ -48,6 +51,11 @@ export class RolesService {
   }
 
   async update(id: string, dto: Partial<CreateRoleDto>): Promise<Role> {
+    const roleToUpdate = await this.roleRepository.findOne({ where: { id } });
+    if (!roleToUpdate) throw new NotFoundException('Role not found');
+    if (roleToUpdate.name === 'super_admin') {
+      throw new ConflictException('The super_admin role cannot be modified.');
+    }
     await this.roleRepository.update(id, dto);
     const updated = await this.roleRepository.findOne({ where: { id } });
     if (!updated) throw new NotFoundException('Role not found');
@@ -58,6 +66,9 @@ export class RolesService {
     // Check if any users are assigned to this role
     const role = await this.roleRepository.findOne({ where: { id }, relations: ['userRoles'] });
     if (!role) return { message: 'Role not found or already deleted.' };
+    if (role.name === 'super_admin') {
+      throw new ConflictException('The super_admin role cannot be deleted.');
+    }
     if (role.userRoles && role.userRoles.length > 0) {
       throw new ConflictException('Cannot delete role: users are assigned');
     }
@@ -68,6 +79,9 @@ export class RolesService {
   async assignPermissions(roleId: string, dto: AssignPermissionsDto) {
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) throw new NotFoundException('Role not found');
+    if (role.name === 'super_admin') {
+      throw new ConflictException('The super_admin role has implicit access to all permissions and cannot be modified.');
+    }
     await this.rolePermissionRepository.delete({ role: { id: roleId } });
     const permissions = await this.permissionRepository.findByIds(dto.permissionIds);
     const rolePermissions = permissions.map((permission) =>
