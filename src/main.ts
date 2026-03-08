@@ -1,3 +1,8 @@
+// Fix ReferenceError: crypto is not defined for Node.js < 20
+if (typeof global.crypto === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  global.crypto = require('node:crypto').webcrypto;
+}
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -37,8 +42,9 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(process.env.PORT ?? 2546);
+  const port = process.env.PORT || 2546;
+  await app.listen(port);
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`Swagger documentation is available at: http://localhost:${port}/api`);
 }
 bootstrap();
-// Fix ReferenceError: crypto is not defined
-global.crypto = require('crypto');
