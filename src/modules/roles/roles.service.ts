@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Role, RoleName, RoleType } from './entities/role.entity';
+import { Role, RoleType } from './entities/role.entity';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { Permission } from './entities/permission.entity';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto';

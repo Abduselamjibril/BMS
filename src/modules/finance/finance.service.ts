@@ -13,6 +13,9 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { Lease } from '../leases/entities/lease.entity';
+import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 
 @Injectable()
 export class FinanceService {
@@ -27,6 +30,12 @@ export class FinanceService {
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(DepositAdvice)
     private readonly depositAdviceRepo: Repository<DepositAdvice>,
+    @InjectRepository(OrganizationSettings)
+    private readonly settingsRepo: Repository<OrganizationSettings>,
+    @InjectQueue('monthly-invoice')
+    private readonly monthlyInvoiceQueue: Queue,
+    @InjectQueue('overdue-penalty')
+    private readonly overduePenaltyQueue: Queue,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -36,6 +45,10 @@ export class FinanceService {
    */
   async createBankAccount(dto: CreateBankAccountDto) {
     return this.bankAccountRepo.save(dto);
+  }
+
+  async getBankAccounts() {
+    return this.bankAccountRepo.find();
   }
 
   /**
@@ -84,9 +97,13 @@ export class FinanceService {
       throw new BadRequestException('Unit not associated with lease');
     }
 
+    // Fetch Tax Rules from settings
+    const settings = await this.settingsRepo.findOne({ where: {} });
+    const vatRate = settings ? Number(settings.vat_rate) : 0.15;
+
     // Calculate totals
     const subtotal = dto.items.reduce((sum, item) => sum + item.amount, 0);
-    const tax_amount = subtotal * 0.15; // 15% VAT
+    const tax_amount = subtotal * vatRate;
     const total_amount = subtotal + tax_amount;
 
     const invoice = this.invoiceRepo.create({
@@ -251,6 +268,22 @@ export class FinanceService {
 
     qb.groupBy('unit.buildingId');
     return qb.getRawMany();
+  }
+
+  async updateTaxRules(dto: { vat_rate: number; withholding_rate: number }) {
+    let settings = await this.settingsRepo.findOne({ where: {} });
+    if (!settings) {
+      settings = this.settingsRepo.create(dto);
+    } else {
+      settings.vat_rate = dto.vat_rate;
+      settings.withholding_rate = dto.withholding_rate;
+    }
+    return this.settingsRepo.save(settings);
+  }
+
+  async generateInvoicesTrigger(data: { site_id?: string; building_id?: string }) {
+    await this.monthlyInvoiceQueue.add('generate-invoices', data);
+    return { status: 'queued', job: 'monthly-invoice' };
   }
 
   async getTaxReport(month?: string) {

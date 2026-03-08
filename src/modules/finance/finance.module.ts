@@ -9,6 +9,7 @@ import { InvoiceItem } from './entities/invoice-item.entity';
 import { Payment } from './entities/payment.entity';
 import { DepositAdvice } from './entities/deposit-advice.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       InvoiceItem,
       Payment,
       DepositAdvice,
+      OrganizationSettings,
     ]),
     NotificationsModule,
     BullModule.registerQueue({

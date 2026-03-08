@@ -6,7 +6,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RoleName } from '../roles/entities/role.entity';
+// RoleName enum removed
 import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('reports')
@@ -17,7 +17,7 @@ export class ReportsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Management dashboard KPIs' })
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
   async dashboard() {
@@ -26,7 +26,7 @@ export class ReportsController {
 
   @Get('financial')
   @ApiOperation({ summary: 'Monthly revenue trends' })
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async financial() {
@@ -35,7 +35,7 @@ export class ReportsController {
 
   @Get('occupancy')
   @ApiOperation({ summary: 'Occupancy insights and expiring leases' })
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN, RoleName.NOMINEE_ADMIN)
+  @Roles('super_admin', 'company_admin', 'nominee_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async occupancy() {

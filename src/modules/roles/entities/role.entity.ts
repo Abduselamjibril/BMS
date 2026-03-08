@@ -2,17 +2,9 @@ import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { UserRole } from './user-role.entity';
 import { RolePermission } from './role-permission.entity';
 
-export enum RoleName {
-  SUPER_ADMIN = 'super_admin',
-  COMPANY_ADMIN = 'company_admin',
-  NOMINEE_ADMIN = 'nominee_admin',
-  ADMIN = 'admin',
-  SITE_ADMIN = 'site_admin',
-  CONTRACTOR = 'contractor',
-}
+// Removed RoleName enum to allow dynamic custom roles
 
-export enum RoleType {
-  SYSTEM = 'system',
+export enum RoleType {  SYSTEM = 'system',
   COMPANY = 'company',
   BUILDING = 'building',
 }
@@ -22,9 +14,8 @@ export class Role {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'enum', enum: RoleName })
-  name!: RoleName;
-
+  @Column({ type: 'varchar', length: 100, unique: true })
+  name!: string;
   @Column({ type: 'enum', enum: RoleType })
   type!: RoleType;
 

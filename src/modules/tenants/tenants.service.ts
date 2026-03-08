@@ -29,7 +29,7 @@ import { VerifyDocumentDto } from './dto/verify-document.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UserRole } from '../roles/entities/user-role.entity';
-import { RoleName } from '../roles/entities/role.entity';
+// RoleName enum removed
 
 @Injectable()
 export class TenantsService {
@@ -104,7 +104,7 @@ export class TenantsService {
       relations: ['role'],
     });
 
-    const isSuperAdmin = roles.some((role) => role.role.name === RoleName.SUPER_ADMIN);
+    const isSuperAdmin = roles.some((role) => role.role.name === 'super_admin');
     if (!isSuperAdmin) {
       throw new ForbiddenException('Only super admins can view tenants');
     }

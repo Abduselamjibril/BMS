@@ -8,15 +8,19 @@ import { FinanceService } from './finance.service';
 export class OverduePenaltyProcessor {
   constructor(private readonly financeService: FinanceService) {}
 
-  @Process()
-  async handleOverduePenalty(job: Job) {
-    // job.data: { date }
-    // Find invoices due before date and not PAID, set status to OVERDUE, add penalty item
-    // Example:
-    // const overdueInvoices = await this.financeService.getOverdueInvoices(job.data.date);
-    // for (const invoice of overdueInvoices) {
-    //   await this.financeService.applyPenalty(invoice);
-    // }
-    return { status: 'completed' };
+  @Process('apply-penalties')
+  async handleOverduePenalty(job: Job<{ date: string }>) {
+    console.log(`Processing overdue penalties for date: ${job.data.date}`);
+    const overdueInvoices = await this.financeService.getOverdueInvoices(job.data.date);
+    
+    for (const invoice of overdueInvoices) {
+      try {
+        await this.financeService.applyPenalty(invoice);
+      } catch (e) {
+        console.error(`Failed to apply penalty for invoice ${invoice.id}:`, e.message);
+      }
+    }
+    
+    return { processed: overdueInvoices.length };
   }
 }

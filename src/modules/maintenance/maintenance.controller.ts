@@ -39,6 +39,28 @@ export class MaintenanceController {
     return this.maintenanceService.submitRequest({ ...dto, tenantId: tenant_id });
   }
 
+  @Get('contractors')
+  @ApiOperation({ summary: 'List all contractors' })
+  @ApiResponse({ status: 200, description: 'Contractors list.' })
+  async getContractors() {
+    return this.maintenanceService.getContractors();
+  }
+
+  @Post('contractors')
+  @Permissions('maintenance:contractors:create')
+  @ApiOperation({ summary: 'Create a contractor' })
+  @ApiResponse({ status: 201, description: 'Contractor created.' })
+  async createContractor(@Body() dto: any) {
+    return this.maintenanceService.createContractor(dto);
+  }
+
+  @Get('work-orders')
+  @ApiOperation({ summary: 'List all work orders with relations' })
+  @ApiResponse({ status: 200, description: 'Work orders list.' })
+  async getWorkOrders() {
+    return this.maintenanceService.getWorkOrders();
+  }
+
   @Get('requests')
   @ApiOperation({ summary: 'Get maintenance requests (scoped)' })
   @ApiResponse({ status: 200, description: 'Requests list.' })
@@ -140,8 +162,7 @@ export class MaintenanceController {
     }
   })
   async submitFeedback(@Body() dto: any) {
-    // TODO: Implement feedback logic
-    return { status: 'feedback received', dto };
+    return this.maintenanceService.submitFeedback(dto);
   }
 
   @Get('reports')

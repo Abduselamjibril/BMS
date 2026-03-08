@@ -19,7 +19,7 @@ import { CreateLeaseDto } from './dto/create-lease.dto';
 import { RenewLeaseDto } from './dto/renew-lease.dto';
 import { TerminateLeaseDto } from './dto/terminate-lease.dto';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
-import { RoleName } from '../roles/entities/role.entity';
+// RoleName enum removed
 import { UserRole } from '../roles/entities/user-role.entity';
 import { LeasePdfService } from './services/lease-pdf.service';
 
@@ -126,7 +126,7 @@ export class LeasesService {
       relations: ['role'],
     });
 
-    const isNominee = userRoles.some((ur) => ur.role.name === RoleName.NOMINEE_ADMIN);
+    const isNominee = userRoles.some((ur) => ur.role.name === 'nominee_admin');
 
     const query = this.leaseRepository
       .createQueryBuilder('lease')

@@ -37,7 +37,7 @@ export class MaintenanceService {
   async getRequests(user: any) {
     // Scoped access: managers see building, tenants see own
     if (user.role === 'tenant') {
-      return this.requestRepo.find({ where: { tenant: { id: user.id } } });
+      return this.requestRepo.find({ where: { tenant: { id: user.id } }, relations: ['tenant', 'unit'] });
     }
     if (user.role === 'nominee_admin') {
       // Find assigned buildings
@@ -56,7 +56,22 @@ export class MaintenanceService {
         .getMany();
     }
     // Super admin sees all
-    return this.requestRepo.find();
+    return this.requestRepo.find({ relations: ['tenant', 'unit'] });
+  }
+
+  async getContractors() {
+    return this.contractorRepo.find();
+  }
+
+  async createContractor(dto: { name: string; phone: string; specialization: string }) {
+    return this.contractorRepo.save(dto);
+  }
+
+  async getWorkOrders() {
+    return this.workOrderRepo.find({
+      relations: ['request', 'request.tenant', 'request.unit', 'contractor'],
+      order: { scheduled_date: 'DESC' },
+    });
   }
 
   async updateRequest(id: string, dto: any) {

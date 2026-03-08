@@ -4,7 +4,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RoleName } from '../roles/entities/role.entity';
+// RoleName enum removed
 import { Auth } from '../../common/decorators/auth.decorator';
 import type { Response, Request } from 'express';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
@@ -17,7 +17,7 @@ export class QrController {
   @Post('qr/generate/:unitId')
   @Auth()
   @Permissions('qr:generate')
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Generate a QR token and return QR metadata (admin)' })
   async generate(@Param('unitId') unitId: string) {
@@ -56,7 +56,7 @@ export class QrController {
   @Get('qr/analytics')
   @Auth()
   @Permissions('qr:analytics')
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: QR analytics - top scanned QR codes' })
   @ApiQuery({ name: 'limit', required: false })
@@ -68,7 +68,7 @@ export class QrController {
   @Patch('qr/:id/deactivate')
   @Auth()
   @Permissions('qr:deactivate')
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: deactivate a QR code by id' })
   async deactivate(@Param('id') id: string) {
@@ -78,7 +78,7 @@ export class QrController {
   @Get('qr/export/pdf')
   @Auth()
   @Permissions('qr:export_pdf')
-  @Roles(RoleName.SUPER_ADMIN, RoleName.COMPANY_ADMIN)
+  @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: export printable PDF sheets of QR codes' })
   async exportPdf(@Query('ids') idsQuery: string | undefined, @Res() res: Response) {

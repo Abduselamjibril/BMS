@@ -72,9 +72,9 @@ export class FinanceController {
     @ApiOperation({ summary: 'Patch tax rules (VAT/Withholding)' })
     @ApiResponse({ status: 200, description: 'Tax rules patched.' })
     @ApiBody({ type: PatchTaxRulesDto })
+    @ApiBody({ type: PatchTaxRulesDto })
     async patchTaxRules(@Body() dto: PatchTaxRulesDto) {
-      // TODO: Patch VAT/Withholding settings
-      return { status: 'patched', dto };
+      return this.financeService.updateTaxRules(dto);
     }
 
     @Delete('invoices/:id')
@@ -97,6 +97,14 @@ export class FinanceController {
   @ApiResponse({ status: 201, description: 'Bank account created.' })
   async createBankAccount(@Body() dto: CreateBankAccountDto) {
     return this.financeService.createBankAccount(dto);
+  }
+
+  @Get('bank-accounts')
+  @Permissions('finance:bank_accounts:read')
+  @ApiOperation({ summary: 'List all bank accounts' })
+  @ApiResponse({ status: 200, description: 'Bank accounts list.' })
+  async getBankAccounts() {
+    return this.financeService.getBankAccounts();
   }
 
   @Post('invoices')
@@ -162,8 +170,7 @@ export class FinanceController {
   @ApiOperation({ summary: 'Manually trigger BullMQ invoice generation' })
   @ApiResponse({ status: 200, description: 'Invoice generation triggered.' })
   async generateInvoices(@Body() data: { site_id?: string; building_id?: string }) {
-    // TODO: Add BullMQ job trigger logic
-    return { status: 'triggered', data };
+    return this.financeService.generateInvoicesTrigger(data);
   }
 
   @Post('tax-rules')
@@ -193,8 +200,7 @@ export class FinanceController {
     },
   })
   async updateTaxRules(@Body() dto: PatchTaxRulesDto) {
-    // TODO: Update VAT/Withholding settings
-    return { status: 'updated', dto };
+    return this.financeService.updateTaxRules(dto);
   }
 
   @Get('reports/revenue')
