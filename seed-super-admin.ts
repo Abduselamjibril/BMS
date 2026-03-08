@@ -5,6 +5,12 @@ import { User } from './src/modules/users/entities/user.entity';
 import { Role } from './src/modules/roles/entities/role.entity';
 import { UserRole } from './src/modules/roles/entities/user-role.entity';
 import * as bcrypt from 'bcryptjs';
+import { webcrypto } from 'node:crypto';
+
+// Node 18 containers may not expose global crypto by default; Nest Schedule expects it.
+if (!(globalThis as any).crypto) {
+  (globalThis as any).crypto = webcrypto;
+}
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
