@@ -38,7 +38,7 @@ export class FinanceService {
     private readonly overduePenaltyQueue: Queue,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   /**
    * BANK ACCOUNTS
@@ -84,9 +84,9 @@ export class FinanceService {
 
   async createInvoice(dto: CreateInvoiceDto) {
     // Validation: Check Lease, Tenant, Unit existence
-    const lease = await this.dataSource.getRepository(Lease).findOne({ 
-      where: { id: dto.lease_id }, 
-      relations: ['tenant', 'unit'] 
+    const lease = await this.dataSource.getRepository(Lease).findOne({
+      where: { id: dto.lease_id },
+      relations: ['tenant', 'unit']
     });
 
     if (!lease) throw new NotFoundException('Lease not found');
@@ -136,7 +136,7 @@ export class FinanceService {
   async voidInvoice(id: string) {
     const invoice = await this.invoiceRepo.findOne({ where: { id } });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    
+
     if (invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestException('Cannot void an invoice that is already paid');
     }
@@ -149,8 +149,8 @@ export class FinanceService {
    * PAYMENTS
    */
   async createPayment(dto: CreatePaymentDto) {
-    const invoice = await this.invoiceRepo.findOne({ 
-      where: { id: dto.invoice_id } 
+    const invoice = await this.invoiceRepo.findOne({
+      where: { id: dto.invoice_id }
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
@@ -162,11 +162,11 @@ export class FinanceService {
   }
 
   async verifyPayment(id: string, dto: { verified_by: string; status: 'confirmed' | 'rejected' }) {
-    const payment = await this.paymentRepo.findOne({ 
-      where: { id }, 
-      relations: ['invoice'] 
+    const payment = await this.paymentRepo.findOne({
+      where: { id },
+      relations: ['invoice']
     });
-    
+
     if (!payment) throw new NotFoundException('Payment record not found');
 
     payment.status = dto.status as PaymentStatus;
@@ -227,28 +227,28 @@ export class FinanceService {
   async getOverdueInvoices(date: string) {
     return this.invoiceRepo.createQueryBuilder('invoice')
       .where('invoice.due_date < :date', { date })
-      .andWhere('invoice.status NOT IN (:...statuses)', { 
-        statuses: [InvoiceStatus.PAID, InvoiceStatus.CANCELLED] 
+      .andWhere('invoice.status NOT IN (:...statuses)', {
+        statuses: [InvoiceStatus.PAID, InvoiceStatus.CANCELLED]
       })
       .getMany();
   }
 
   async applyPenalty(invoice: Invoice) {
     const penaltyAmount = invoice.total_amount * 0.02; // 2% penalty
-    
+
     const penaltyItem = this.invoiceItemRepo.create({
       invoice,
       type: InvoiceItemType.PENALTY,
       amount: penaltyAmount,
       description: 'Overdue penalty (2%)',
     });
-    
+
     await this.invoiceItemRepo.save(penaltyItem);
 
     // Update invoice status and total
     invoice.total_amount = Number(invoice.total_amount) + penaltyAmount;
     invoice.status = InvoiceStatus.OVERDUE;
-    
+
     return this.invoiceRepo.save(invoice);
   }
 
@@ -273,7 +273,12 @@ export class FinanceService {
   async updateTaxRules(dto: { vat_rate: number; withholding_rate: number }) {
     let settings = await this.settingsRepo.findOne({ where: {} });
     if (!settings) {
-      settings = this.settingsRepo.create(dto);
+      settings = this.settingsRepo.create({
+        ...dto,
+        company_name: 'Default Company',
+        tin_number: '0000000000',
+        vat_number: '0000000000',
+      });
     } else {
       settings.vat_rate = dto.vat_rate;
       settings.withholding_rate = dto.withholding_rate;
@@ -289,13 +294,13 @@ export class FinanceService {
   async getTaxReport(month?: string) {
     const qb = this.invoiceRepo.createQueryBuilder('invoice')
       .select('SUM(invoice.tax_amount)', 'total_vat')
-      .addSelect('SUM(invoice.total_amount * 0.02)', 'total_withholding') 
+      .addSelect('SUM(invoice.total_amount * 0.02)', 'total_withholding')
       .where('invoice.status = :status', { status: InvoiceStatus.PAID });
 
     if (month) {
-        qb.andWhere('EXTRACT(MONTH FROM invoice.due_date) = :month', { month });
+      qb.andWhere('EXTRACT(MONTH FROM invoice.due_date) = :month', { month });
     }
-    
+
     return qb.getRawOne();
   }
 }

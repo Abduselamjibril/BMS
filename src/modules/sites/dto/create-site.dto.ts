@@ -21,4 +21,28 @@ export class CreateSiteDto {
   @IsString()
   @IsNotEmpty()
   location_lat_long: string;
+
+  @ApiProperty({ required: false, example: 'SIT-001' })
+  @IsString()
+  code?: string;
+
+  @ApiProperty({ required: false, example: '123 Main St' })
+  @IsString()
+  address?: string;
+
+  @ApiProperty({ required: false, example: 'America/New_York' })
+  @IsString()
+  timezone?: string;
+
+  @ApiProperty({ required: false, example: 'USD' })
+  @IsString()
+  currency?: string;
+
+  @ApiProperty({ required: false, example: 'contact@site.com' })
+  @IsString()
+  contact_email?: string;
+
+  @ApiProperty({ required: false, example: 'Some extra notes' })
+  @IsString()
+  notes?: string;
 }
