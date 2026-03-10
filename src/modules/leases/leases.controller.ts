@@ -24,13 +24,14 @@ import { LeasesService } from './leases.service';
 import { CreateLeaseDto } from './dto/create-lease.dto';
 import { RenewLeaseDto } from './dto/renew-lease.dto';
 import { TerminateLeaseDto } from './dto/terminate-lease.dto';
+import { UploadLeaseDocDto } from './dto/upload-lease-doc.dto';
 // upload lease DTO no longer used for multipart upload
 
 @ApiTags('leases')
 @Controller()
 @Auth()
 export class LeasesController {
-  constructor(private readonly leasesService: LeasesService) {}
+  constructor(private readonly leasesService: LeasesService) { }
 
   @Post('leases')
   @Permissions('leases:create')
@@ -42,11 +43,13 @@ export class LeasesController {
   @Get('leases')
   @ApiOperation({ summary: 'List leases with nominee building assignment scope' })
   @ApiQuery({ name: 'expiringSoon', required: false, type: Boolean })
+  @ApiQuery({ name: 'status', required: false, type: String })
   async findAll(
     @Req() req: any,
     @Query('expiringSoon', new ParseBoolPipe({ optional: true })) expiringSoon?: boolean,
+    @Query('status') status?: string,
   ) {
-    return this.leasesService.findAll(req.user.id, expiringSoon);
+    return this.leasesService.findAll(req.user.id, expiringSoon, status);
   }
 
   @Patch('leases/:id/activate')
@@ -76,14 +79,7 @@ export class LeasesController {
   @Post('leases/:id/upload')
   @ApiOperation({ summary: 'Attach signed lease document path' })
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: { type: 'string', format: 'binary' },
-      },
-    },
-  })
+  @ApiBody({ type: UploadLeaseDocDto })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

@@ -3,9 +3,9 @@ import { Tenant } from './tenant.entity';
 
 export enum TenantDocumentType {
   ID = 'ID',
-  PASSPORT = 'Passport',
-  CONTRACT = 'Contract',
-  PRIMARY_ID = 'Primary ID',
+  PASSPORT = 'PASSPORT',
+  CONTRACT = 'CONTRACT',
+  PRIMARY_ID = 'PRIMARY_ID',
 }
 
 @Entity('tenant_documents')

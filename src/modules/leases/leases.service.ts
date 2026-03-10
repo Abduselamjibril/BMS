@@ -44,7 +44,7 @@ export class LeasesService {
     private readonly userRoleRepository: Repository<UserRole>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
-  ) {}
+  ) { }
 
   private normalizeId(raw?: string): string {
     if (!raw) return raw as unknown as string;
@@ -120,7 +120,7 @@ export class LeasesService {
     return this.leaseRepository.save(lease);
   }
 
-  async findAll(currentUserId: string, expiringSoon?: boolean): Promise<Lease[]> {
+  async findAll(currentUserId: string, expiringSoon?: boolean, status?: string): Promise<Lease[]> {
     const userRoles = await this.userRoleRepository.find({
       where: { user: { id: currentUserId } },
       relations: ['role'],
@@ -152,7 +152,11 @@ export class LeasesService {
       const start = now.toISOString().split('T')[0];
       const end = plus30.toISOString().split('T')[0];
       query.andWhere('lease.end_date BETWEEN :start AND :end', { start, end });
-      query.andWhere('lease.status = :status', { status: LeaseStatus.ACTIVE });
+      query.andWhere('lease.status = :activeStatus', { activeStatus: LeaseStatus.ACTIVE });
+    }
+
+    if (status) {
+      query.andWhere('lease.status = :status', { status: status.toUpperCase() });
     }
 
     return query.getMany();

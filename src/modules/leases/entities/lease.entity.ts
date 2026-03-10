@@ -12,17 +12,17 @@ import { Unit } from '../../units/entities/unit.entity';
 import { Building } from '../../buildings/entities/building.entity';
 
 export enum BillingCycle {
-  MONTHLY = 'monthly',
-  QUARTERLY = 'quarterly',
-  YEARLY = 'yearly',
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+  YEARLY = 'YEARLY',
 }
 
 export enum LeaseStatus {
-  DRAFT = 'draft',
-  ACTIVE = 'active',
-  EXPIRED = 'expired',
-  TERMINATED = 'terminated',
-  RENEWED = 'renewed',
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  TERMINATED = 'TERMINATED',
+  RENEWED = 'RENEWED',
 }
 
 @Entity('leases')

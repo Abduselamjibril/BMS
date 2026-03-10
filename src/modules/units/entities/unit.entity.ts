@@ -3,18 +3,18 @@ import { Building } from '../../buildings/entities/building.entity';
 import { UnitAmenity } from '../../amenities/entities/unit-amenity.entity';
 
 export enum UnitType {
-  STUDIO = 'studio',
+  STUDIO = 'STUDIO',
   ONE_BEDROOM = '1BR',
   TWO_BEDROOM = '2BR',
-  OFFICE = 'office',
-  SHOP = 'shop',
+  OFFICE = 'OFFICE',
+  SHOP = 'SHOP',
 }
 
 export enum UnitStatus {
-  VACANT = 'vacant',
-  OCCUPIED = 'occupied',
-  MAINTENANCE = 'maintenance',
-  RESERVED = 'reserved',
+  VACANT = 'VACANT',
+  OCCUPIED = 'OCCUPIED',
+  MAINTENANCE = 'MAINTENANCE',
+  RESERVED = 'RESERVED',
 }
 
 @Entity('units')

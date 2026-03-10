@@ -3,13 +3,13 @@ import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
 
 export enum MaintenanceStatus {
-  SUBMITTED = 'submitted',
-  APPROVED = 'approved',
-  ASSIGNED = 'assigned',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CLOSED = 'closed',
-  CANCELLED = 'cancelled',
+  SUBMITTED = 'SUBMITTED',
+  APPROVED = 'APPROVED',
+  ASSIGNED = 'ASSIGNED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  CLOSED = 'CLOSED',
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('maintenance_requests')

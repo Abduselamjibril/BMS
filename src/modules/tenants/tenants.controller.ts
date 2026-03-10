@@ -22,16 +22,17 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { TenantsService } from './tenants.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { CreateTenantApplicationDto } from './dto/create-tenant-application.dto';
-import { CreateTenantDocumentDto } from './dto/create-tenant-document.dto';
 import { VerifyDocumentDto } from './dto/verify-document.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { UploadTenantDocumentDto } from './dto/upload-tenant-document.dto';
+import { TenantDocumentType } from './entities/tenant-document.entity';
 
 @ApiTags('tenants')
 @Controller()
 @Auth()
 export class TenantsController {
-  constructor(private readonly tenantsService: TenantsService) {}
+  constructor(private readonly tenantsService: TenantsService) { }
 
   @Get('tenants')
   @ApiOperation({ summary: 'List tenants' })
@@ -68,17 +69,7 @@ export class TenantsController {
   @Post('documents')
   @ApiOperation({ summary: 'Create tenant document record' })
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['tenant_id', 'type', 'file'],
-      properties: {
-        tenant_id: { type: 'string' },
-        type: { type: 'string' },
-        file: { type: 'string', format: 'binary' },
-      },
-    },
-  })
+  @ApiBody({ type: UploadTenantDocumentDto })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -104,7 +95,7 @@ export class TenantsController {
     }),
   )
   async createTenantDocument(
-    @Body() dto: CreateTenantDocumentDto,
+    @Body() dto: UploadTenantDocumentDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
@@ -113,7 +104,7 @@ export class TenantsController {
     const fileUrl = `/public/tenant-documents/${file.filename}`;
     return this.tenantsService.createTenantDocument({
       tenant_id: dto.tenant_id,
-      type: dto.type,
+      type: dto.type as TenantDocumentType,
       file_url: fileUrl,
     });
   }

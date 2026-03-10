@@ -22,7 +22,7 @@ export class MaintenanceService {
     @InjectRepository(UserBuilding)
     private readonly userBuildingRepo: Repository<UserBuilding>,
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   async submitRequest(dto: any) {
     // Validate tenant/unit, create request
@@ -110,7 +110,7 @@ export class MaintenanceService {
     if (!workOrder) return result;
 
     // Status-based notifications
-    if (status === 'in_progress') {
+    if (status === MaintenanceStatus.IN_PROGRESS) {
       // Notify tenant
       if (workOrder.request && workOrder.request.tenant) {
         await this.notificationsService.notify(
@@ -122,7 +122,7 @@ export class MaintenanceService {
         );
       }
     }
-    if (status === 'completed') {
+    if (status === MaintenanceStatus.COMPLETED) {
       // Notify tenant
       if (workOrder.request && workOrder.request.tenant) {
         await this.notificationsService.notify(
@@ -142,7 +142,7 @@ export class MaintenanceService {
     const workOrder = await this.workOrderRepo.findOne({ where: { id } });
     if (!workOrder) throw new NotFoundException('Work order not found.');
     if (!workOrder.started_at || !workOrder.completed_at) {
-        return null; // Cannot calculate SLA if start or end is missing
+      return null; // Cannot calculate SLA if start or end is missing
     }
     return (workOrder.completed_at.getTime() - workOrder.started_at.getTime()) / 1000;
   }
@@ -155,7 +155,7 @@ export class MaintenanceService {
     });
 
     if (!workOrder) throw new NotFoundException('Work order not found.');
-    if (workOrder.status !== 'completed') {
+    if (workOrder.status !== MaintenanceStatus.COMPLETED) {
       throw new BadRequestException('Feedback can only be submitted for completed work orders.');
     }
     if (workOrder.request.tenant.id !== dto.tenant_id) {
@@ -176,9 +176,9 @@ export class MaintenanceService {
 
     // 1. Average resolution time in seconds
     const completedOrders = await this.workOrderRepo.find({
-      where: { status: 'completed' }
+      where: { status: MaintenanceStatus.COMPLETED as any }
     });
-    
+
     const totalResolutionTime = completedOrders.reduce((sum, wo) => {
       const startTime = wo.started_at?.getTime();
       const completedTime = wo.completed_at?.getTime();
@@ -196,7 +196,7 @@ export class MaintenanceService {
     const contractors = await this.contractorRepo.find();
     const contractorStats = await Promise.all(contractors.map(async (contractor) => {
       const orders = await this.workOrderRepo.find({
-        where: { contractor: { id: contractor.id }, status: 'completed' },
+        where: { contractor: { id: contractor.id }, status: MaintenanceStatus.COMPLETED as any },
       });
 
       const avgCost = orders.length

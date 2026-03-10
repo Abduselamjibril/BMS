@@ -10,14 +10,15 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PatchTaxRulesDto } from './dto/patch-tax-rules.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import { GenerateInvoicesDto } from './dto/generate-invoices.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiQuery, ApiBody, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('Finance')
 @Controller('finance')
 @Auth()
 // @UseGuards(RolesGuard) // Uncomment if RolesGuard is available
 export class FinanceController {
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(private readonly financeService: FinanceService) { }
 
   @Get('invoices/all')
   @Permissions('finance:invoices:all')
@@ -26,70 +27,55 @@ export class FinanceController {
   async getAllInvoices() {
     return this.financeService.getAllInvoices();
   }
-    @Get('invoices')
-    @ApiOperation({ summary: 'Get invoices (scoped & filtered)' })
-    @ApiResponse({ status: 200, description: 'Invoices list.' })
-    async getInvoices(@Query('building_id') building_id?: string, @Query('status') status?: string) {
-      return this.financeService.getInvoices(building_id, status);
-    }
+  @Get('invoices')
+  @ApiOperation({ summary: 'Get invoices (scoped & filtered)' })
+  @ApiResponse({ status: 200, description: 'Invoices list.' })
+  async getInvoices(@Query('building_id') building_id?: string, @Query('status') status?: string) {
+    return this.financeService.getInvoices(building_id, status);
+  }
 
-    @Patch('payments/:id/verify')
-    @Permissions('finance:payments:verify')
-    @ApiOperation({ summary: 'Verify payment slip and update invoice status' })
-    @ApiResponse({ status: 200, description: 'Payment verified.' })
-    @ApiParam({
-      name: 'id',
-      description: 'Payment ID (UUID) to verify',
-      required: true,
-      example: 'a7d4c5e4-1a1a-413a-aa3d-4c362020d3e8',
-    })
-    @ApiBody({
-      schema: {
-        type: 'object',
-        properties: {
-          status: {
-            type: 'string',
-            enum: ['confirmed', 'rejected'],
-            example: 'confirmed',
-            description: 'Verification status',
-          },
-        },
-        required: ['status'],
-        example: { status: 'confirmed' },
-      },
-    })
-    async verifyPayment(
-      @Body() dto: { status: 'confirmed' | 'rejected' },
-      @Param('id') id: string,
-      @Req() req: any
-    ) {
-      const verified_by = req.user.id;
-      return this.financeService.verifyPayment(id, { verified_by, status: dto.status });
-    }
+  @Patch('payments/:id/verify')
+  @Permissions('finance:payments:verify')
+  @ApiOperation({ summary: 'Verify payment slip and update invoice status' })
+  @ApiResponse({ status: 200, description: 'Payment verified.' })
+  @ApiParam({
+    name: 'id',
+    description: 'Payment ID (UUID) to verify',
+    required: true,
+    example: 'a7d4c5e4-1a1a-413a-aa3d-4c362020d3e8',
+  })
+  async verifyPayment(
+    @Body() dto: VerifyPaymentDto,
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const verified_by = req.user.id;
+    return this.financeService.verifyPayment(id, { verified_by, status: dto.status });
+  }
 
-    @Patch('tax-rules')
-    @Permissions('finance:tax_rules:update')
-    @ApiOperation({ summary: 'Patch tax rules (VAT/Withholding)' })
-    @ApiResponse({ status: 200, description: 'Tax rules patched.' })
-    @ApiBody({ type: PatchTaxRulesDto })
-    @ApiBody({ type: PatchTaxRulesDto })
-    async patchTaxRules(@Body() dto: PatchTaxRulesDto) {
-      return this.financeService.updateTaxRules(dto);
-    }
+  @Patch('tax-rules')
+  @Permissions('finance:tax_rules:update')
+  @ApiOperation({ summary: 'Patch tax rules (VAT/Withholding)' })
+  @ApiResponse({ status: 200, description: 'Tax rules patched.' })
+  @ApiBody({ type: PatchTaxRulesDto })
+  @ApiBody({ type: PatchTaxRulesDto })
+  async patchTaxRules(@Body() dto: PatchTaxRulesDto) {
+    return this.financeService.updateTaxRules(dto);
+  }
 
-    @Delete('invoices/:id')
-    @Permissions('finance:invoices:void')
-    @ApiOperation({ summary: 'Void invoice (set status to CANCELLED)' })
-    @ApiResponse({ status: 200, description: 'Invoice voided.' })
-    @ApiParam({
-      name: 'id',
-      description: 'Invoice ID (UUID) to void',
-      required: true,
-      example: '020cab99-902d-4bc8-b1cb-44f445b4a7f6',
-    })
-    async voidInvoice(@Param('id') id: string) {
-      return this.financeService.voidInvoice(id);
-    }
+  @Delete('invoices/:id')
+  @Permissions('finance:invoices:void')
+  @ApiOperation({ summary: 'Void invoice (set status to CANCELLED)' })
+  @ApiResponse({ status: 200, description: 'Invoice voided.' })
+  @ApiParam({
+    name: 'id',
+    description: 'Invoice ID (UUID) to void',
+    required: true,
+    example: '020cab99-902d-4bc8-b1cb-44f445b4a7f6',
+  })
+  async voidInvoice(@Param('id') id: string) {
+    return this.financeService.voidInvoice(id);
+  }
 
   @Post('bank-accounts')
   @Permissions('finance:bank_accounts:create')
@@ -169,7 +155,7 @@ export class FinanceController {
   @Permissions('finance:invoices:generate')
   @ApiOperation({ summary: 'Manually trigger BullMQ invoice generation' })
   @ApiResponse({ status: 200, description: 'Invoice generation triggered.' })
-  async generateInvoices(@Body() data: { site_id?: string; building_id?: string }) {
+  async generateInvoices(@Body() data: GenerateInvoicesDto) {
     return this.financeService.generateInvoicesTrigger(data);
   }
 

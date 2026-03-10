@@ -3,9 +3,9 @@ import { UserRole } from '../../roles/entities/user-role.entity';
 import { LoginHistory } from './login-history.entity';
 
 export enum UserStatus {
-  ACTIVE = 'active',
-  LOCKED = 'locked',
-  INACTIVE = 'inactive',
+  ACTIVE = 'ACTIVE',
+  LOCKED = 'LOCKED',
+  INACTIVE = 'INACTIVE',
 }
 
 @Entity('users')

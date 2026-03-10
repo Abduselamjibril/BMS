@@ -18,17 +18,17 @@ export class UnitsService {
     private readonly amenityRepo: Repository<Amenity>,
     @InjectRepository(Building)
     private readonly buildingRepository: Repository<Building>,
-  ) {}
+  ) { }
 
   async create(dto: CreateUnitDto): Promise<Unit> {
     const building = await this.buildingRepository.findOne({ where: { id: dto.buildingId } });
     if (!building) throw new BadRequestException('Building not found');
-    
-    const exists = await this.unitRepository.findOne({ 
-      where: { building: { id: dto.buildingId }, unit_number: dto.unit_number } 
+
+    const exists = await this.unitRepository.findOne({
+      where: { building: { id: dto.buildingId }, unit_number: dto.unit_number }
     });
     if (exists) throw new ConflictException('Unit number must be unique per building');
-    
+
     const unit = this.unitRepository.create({ ...dto, building });
     return this.unitRepository.save(unit);
   }
@@ -36,7 +36,7 @@ export class UnitsService {
   async findAll(buildingId?: string, status?: string): Promise<Unit[]> {
     const where: any = {};
     if (buildingId) where.building = { id: buildingId };
-    if (status) where.status = status;
+    if (status) where.status = status.toUpperCase();
     return this.unitRepository.find({ where });
   }
 
@@ -72,19 +72,19 @@ export class UnitsService {
     const unit = await this.unitRepository.findOne({ where: { id: unitId } });
     const amenity = await this.amenityRepo.findOne({ where: { id: amenityId } });
     if (!unit || !amenity) throw new BadRequestException('Invalid unit or amenity');
-    
-    const exists = await this.unitAmenityRepo.findOne({ 
-      where: { unit: { id: unitId }, amenity: { id: amenityId } } 
+
+    const exists = await this.unitAmenityRepo.findOne({
+      where: { unit: { id: unitId }, amenity: { id: amenityId } }
     });
     if (exists) throw new ConflictException('Amenity already linked');
-    
+
     const link = this.unitAmenityRepo.create({ unit, amenity });
     return this.unitAmenityRepo.save(link);
   }
 
   async removeAmenity(unitId: string, amenityId: string) {
-    const link = await this.unitAmenityRepo.findOne({ 
-      where: { unit: { id: unitId }, amenity: { id: amenityId } } 
+    const link = await this.unitAmenityRepo.findOne({
+      where: { unit: { id: unitId }, amenity: { id: amenityId } }
     });
     if (!link) throw new BadRequestException('Amenity link not found');
     await this.unitAmenityRepo.delete(link.id);
@@ -92,9 +92,9 @@ export class UnitsService {
   }
 
   async getAmenities(unitId: string) {
-    const unit = await this.unitRepository.findOne({ 
-      where: { id: unitId }, 
-      relations: ['unitAmenities', 'unitAmenities.amenity'] 
+    const unit = await this.unitRepository.findOne({
+      where: { id: unitId },
+      relations: ['unitAmenities', 'unitAmenities.amenity']
     });
     if (!unit) throw new BadRequestException('Unit not found');
     return unit.unitAmenities.map((ua) => ua.amenity);

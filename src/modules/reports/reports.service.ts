@@ -16,7 +16,7 @@ export class ReportsService {
     @InjectRepository(LeasePayment)
     private readonly paymentRepo: Repository<LeasePayment>,
     private readonly maintenanceService: MaintenanceService,
-  ) {}
+  ) { }
 
   async dashboard() {
     // Occupancy rate
@@ -67,7 +67,7 @@ export class ReportsService {
     // Vacant units and leases expiring soon
     const vacant = await this.unitRepo.count({ where: { status: 'vacant' } as any });
     const expiring = await this.leaseRepo.createQueryBuilder('l')
-      .where("l.end_date BETWEEN :start AND :end", { start: new Date().toISOString().split('T')[0], end: new Date(new Date().setDate(new Date().getDate()+30)).toISOString().split('T')[0] })
+      .where("l.end_date BETWEEN :start AND :end", { start: new Date().toISOString().split('T')[0], end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0] })
       .andWhere('l.status = :status', { status: LeaseStatus.ACTIVE })
       .getCount();
 

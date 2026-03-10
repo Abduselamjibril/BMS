@@ -11,7 +11,7 @@ import { UpdateSiteDto } from './dto/update-site.dto';
 @Controller('sites')
 @Auth()
 export class SitesController {
-  constructor(private readonly sitesService: SitesService) {}
+  constructor(private readonly sitesService: SitesService) { }
 
   @Post()
   @ApiOperation({ summary: 'Create a site' })
@@ -41,17 +41,7 @@ export class SitesController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update a site' })
   @ApiResponse({ status: 200, description: 'Site updated.' })
-  @ApiBody({
-    description: 'Fields to update for the site (partial)',
-    schema: {
-      example: {
-        name: 'Updated Site Name',
-        city: 'Kigali',
-        subcity: 'Nyarugenge',
-        location_lat_long: ' -1.9579, 30.0619 '
-      },
-    },
-  })
+  @ApiBody({ type: UpdateSiteDto })
   @Permissions('sites:update')
   async update(@Param('id') id: string, @Body() dto: UpdateSiteDto) {
     return this.sitesService.update(id, dto);

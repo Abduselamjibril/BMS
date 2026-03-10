@@ -5,10 +5,10 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 import { Tenant } from './tenant.entity';
 
 export enum TenantApplicationStatus {
-  SUBMITTED = 'submitted',
-  REVIEWING = 'reviewing',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
+  SUBMITTED = 'SUBMITTED',
+  REVIEWING = 'REVIEWING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
 }
 
 @Entity('tenant_applications')

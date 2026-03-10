@@ -3,13 +3,14 @@ import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
+import { UpdateBuildingDto } from './dto/update-building.dto';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Buildings')
 @Controller('buildings')
 @Auth()
 export class BuildingsController {
-  constructor(private readonly buildingsService: BuildingsService) {}
+  constructor(private readonly buildingsService: BuildingsService) { }
 
   @Post()
   @ApiOperation({ summary: 'Create a building' })
@@ -37,28 +38,9 @@ export class BuildingsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update building by id' })
-  @ApiBody({
-    schema: {
-      example: {
-        name: 'Updated Building Name',
-        code: 'BLD-001',
-        type: 'residential',
-        country: 'Ethiopia',
-        city: 'Addis Ababa',
-        subcity: 'Bole',
-        address: '123 Main St',
-        latitude: 9.03,
-        longitude: 38.74,
-        total_units: 10,
-        status: 'active',
-        siteId: 'site-uuid',
-        ownerId: 'owner-uuid'
-      }
-    },
-    type: require('./dto/create-building.dto').CreateBuildingDto
-  })
+  @ApiBody({ type: UpdateBuildingDto })
   @Permissions('buildings:update')
-  update(@Param('id') id: string, @Body() dto: Partial<import('./dto/create-building.dto').CreateBuildingDto>) {
+  update(@Param('id') id: string, @Body() dto: UpdateBuildingDto) {
     return this.buildingsService.update(id, dto);
   }
 
