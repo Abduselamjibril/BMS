@@ -16,16 +16,20 @@ export class ReportsService {
     @InjectRepository(LeasePayment)
     private readonly paymentRepo: Repository<LeasePayment>,
     private readonly maintenanceService: MaintenanceService,
-  ) { }
+  ) {}
 
   async dashboard() {
     // Occupancy rate
     const totalUnits = await this.unitRepo.count();
-    const occupiedLeases = await this.leaseRepo.count({ where: { status: LeaseStatus.ACTIVE } });
-    const occupancy = totalUnits === 0 ? 0 : (occupiedLeases / totalUnits) * 100;
+    const occupiedLeases = await this.leaseRepo.count({
+      where: { status: LeaseStatus.ACTIVE },
+    });
+    const occupancy =
+      totalUnits === 0 ? 0 : (occupiedLeases / totalUnits) * 100;
 
     // Revenue: sum of paid payments
-    const revenueResult = await this.paymentRepo.createQueryBuilder('p')
+    const revenueResult = await this.paymentRepo
+      .createQueryBuilder('p')
       .select('COALESCE(SUM(p.amount),0)', 'total')
       .where('p.status = :status', { status: 'paid' })
       .getRawOne();
@@ -51,7 +55,8 @@ export class ReportsService {
 
   async financialTrend(months = 6) {
     // Returns monthly sums for the past N months
-    const qb = this.paymentRepo.createQueryBuilder('p')
+    const qb = this.paymentRepo
+      .createQueryBuilder('p')
       .select("to_char(p.created_at, 'YYYY-MM')", 'month')
       .addSelect('SUM(p.amount)', 'total')
       .where('p.status = :status', { status: 'paid' })
@@ -60,14 +65,22 @@ export class ReportsService {
       .limit(months);
 
     const rows = await qb.getRawMany();
-    return rows.map(r => ({ month: r.month, total: Number(r.total) }));
+    return rows.map((r) => ({ month: r.month, total: Number(r.total) }));
   }
 
   async occupancyInsights() {
     // Vacant units and leases expiring soon
-    const vacant = await this.unitRepo.count({ where: { status: 'vacant' } as any });
-    const expiring = await this.leaseRepo.createQueryBuilder('l')
-      .where("l.end_date BETWEEN :start AND :end", { start: new Date().toISOString().split('T')[0], end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0] })
+    const vacant = await this.unitRepo.count({
+      where: { status: 'vacant' } as any,
+    });
+    const expiring = await this.leaseRepo
+      .createQueryBuilder('l')
+      .where('l.end_date BETWEEN :start AND :end', {
+        start: new Date().toISOString().split('T')[0],
+        end: new Date(new Date().setDate(new Date().getDate() + 30))
+          .toISOString()
+          .split('T')[0],
+      })
       .andWhere('l.status = :status', { status: LeaseStatus.ACTIVE })
       .getCount();
 

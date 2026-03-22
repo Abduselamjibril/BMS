@@ -4,7 +4,8 @@ import { RolePermission } from './role-permission.entity';
 
 // Removed RoleName enum to allow dynamic custom roles
 
-export enum RoleType {  SYSTEM = 'system',
+export enum RoleType {
+  SYSTEM = 'system',
   COMPANY = 'company',
   BUILDING = 'building',
 }

@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  Request,
+} from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { BuildingsService } from './buildings.service';
@@ -10,7 +19,7 @@ import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 @Controller('buildings')
 @Auth()
 export class BuildingsController {
-  constructor(private readonly buildingsService: BuildingsService) { }
+  constructor(private readonly buildingsService: BuildingsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a building' })
@@ -61,7 +70,10 @@ export class BuildingsController {
   @Post(':buildingId/assign-admin/:userId')
   @ApiOperation({ summary: 'Assign nominee admin to building' })
   @Permissions('buildings:assign_admin')
-  assignAdmin(@Param('buildingId') buildingId: string, @Param('userId') userId: string) {
+  assignAdmin(
+    @Param('buildingId') buildingId: string,
+    @Param('userId') userId: string,
+  ) {
     return this.buildingsService.assignAdmin(buildingId, userId);
   }
 
@@ -75,7 +87,10 @@ export class BuildingsController {
   @Delete(':id/admins/:userId')
   @ApiOperation({ summary: 'Revoke admin access from building' })
   @Permissions('buildings:revoke_admin')
-  revokeAdmin(@Param('id') buildingId: string, @Param('userId') userId: string) {
+  revokeAdmin(
+    @Param('id') buildingId: string,
+    @Param('userId') userId: string,
+  ) {
     return this.buildingsService.revokeAdmin(buildingId, userId);
   }
 }

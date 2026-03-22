@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseBoolPipe,
@@ -12,7 +13,13 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -31,22 +38,27 @@ import { UploadLeaseDocDto } from './dto/upload-lease-doc.dto';
 @Controller()
 @Auth()
 export class LeasesController {
-  constructor(private readonly leasesService: LeasesService) { }
+  constructor(private readonly leasesService: LeasesService) {}
 
   @Post('leases')
   @Permissions('leases:create')
-  @ApiOperation({ summary: 'Create lease draft with overlap and vacancy checks' })
+  @ApiOperation({
+    summary: 'Create lease draft with overlap and vacancy checks',
+  })
   async create(@Body() dto: CreateLeaseDto) {
     return this.leasesService.create(dto);
   }
 
   @Get('leases')
-  @ApiOperation({ summary: 'List leases with nominee building assignment scope' })
+  @ApiOperation({
+    summary: 'List leases with nominee building assignment scope',
+  })
   @ApiQuery({ name: 'expiringSoon', required: false, type: Boolean })
   @ApiQuery({ name: 'status', required: false, type: String })
   async findAll(
     @Req() req: any,
-    @Query('expiringSoon', new ParseBoolPipe({ optional: true })) expiringSoon?: boolean,
+    @Query('expiringSoon', new ParseBoolPipe({ optional: true }))
+    expiringSoon?: boolean,
     @Query('status') status?: string,
   ) {
     return this.leasesService.findAll(req.user.id, expiringSoon, status);
@@ -76,6 +88,13 @@ export class LeasesController {
     return this.leasesService.renew(id, dto);
   }
 
+  @Delete('leases/:id')
+  @Permissions('leases:terminate')
+  @ApiOperation({ summary: 'Delete a draft lease' })
+  async remove(@Param('id') id: string) {
+    return this.leasesService.remove(id);
+  }
+
   @Post('leases/:id/upload')
   @ApiOperation({ summary: 'Attach signed lease document path' })
   @ApiConsumes('multipart/form-data')
@@ -98,7 +117,10 @@ export class LeasesController {
       limits: { fileSize: 10 * 1024 * 1024 },
     }),
   )
-  async uploadDoc(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  async uploadDoc(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     if (!file) {
       throw new Error('No file uploaded');
     }

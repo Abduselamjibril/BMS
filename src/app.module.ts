@@ -40,7 +40,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     }),
     // 2. Add this line BEFORE TypeOrmModule
     ConfigModule.forRoot({
-      isGlobal: true, 
+      isGlobal: true,
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',

@@ -15,14 +15,14 @@ import { MeterReading } from '../utility/entities/meter-reading.entity';
   imports: [
     ScheduleModule.forRoot(),
     NotificationsModule,
-      TypeOrmModule.forFeature([
-        Lease,
-        Tenant,
-        User,
-        Invoice,
-        UtilityMeter,
-        MeterReading,
-      ]),
+    TypeOrmModule.forFeature([
+      Lease,
+      Tenant,
+      User,
+      Invoice,
+      UtilityMeter,
+      MeterReading,
+    ]),
   ],
   providers: [AutomationCronService],
   controllers: [AutomationsController],

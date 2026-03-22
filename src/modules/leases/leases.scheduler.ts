@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { LeasesService } from './leases.service';
 
 @Injectable()
@@ -36,7 +41,10 @@ export class LeasesScheduler implements OnModuleInit, OnModuleDestroy {
         `Lease midnight automation completed: reminders=${result.reminders}, expired=${result.expired}`,
       );
     } catch (error) {
-      this.logger.error('Lease midnight automation failed', error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        'Lease midnight automation failed',
+        error instanceof Error ? error.stack : undefined,
+      );
     }
   }
 }

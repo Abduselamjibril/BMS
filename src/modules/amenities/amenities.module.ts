@@ -9,7 +9,15 @@ import { Building } from '../buildings/entities/building.entity';
 import { Unit } from '../units/entities/unit.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Amenity, BuildingAmenity, UnitAmenity, Building, Unit])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Amenity,
+      BuildingAmenity,
+      UnitAmenity,
+      Building,
+      Unit,
+    ]),
+  ],
   controllers: [AmenitiesController],
   providers: [AmenitiesService],
 })

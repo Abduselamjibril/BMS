@@ -1,5 +1,13 @@
 import { ApiProperty, ApiHideProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { BillingCycle } from '../entities/lease.entity';
 
 export class CreateLeaseDto {

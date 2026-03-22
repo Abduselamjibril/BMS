@@ -1,7 +1,21 @@
-import { Controller, Post, Get, Param, Body, Put, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  Put,
+  Delete,
+} from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto';
@@ -35,17 +49,16 @@ export class RolesController {
       example: {
         name: 'company_admin',
         type: 'company',
-        description: 'Updated description for company admin'
-      }
+        description: 'Updated description for company admin',
+      },
     },
-    type: CreateRoleDto
+    type: CreateRoleDto,
   })
   async update(@Param('id') id: string, @Body() dto: Partial<CreateRoleDto>) {
     return this.rolesService.update(id, dto);
   }
 
   @Permissions('roles:update')
-
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a role (fails if users assigned)' })
   @Permissions('roles:delete')
@@ -56,7 +69,10 @@ export class RolesController {
   @Post(':id/permissions')
   @ApiOperation({ summary: 'Assign permissions to a role' })
   @Permissions('roles:assign_permissions')
-  async assignPermissions(@Param('id') id: string, @Body() dto: AssignPermissionsDto) {
+  async assignPermissions(
+    @Param('id') id: string,
+    @Body() dto: AssignPermissionsDto,
+  ) {
     return this.rolesService.assignPermissions(id, dto);
   }
 }

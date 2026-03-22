@@ -1,4 +1,15 @@
-import { Controller, Post, Param, UseGuards, Get, Req, Res, NotFoundException, Patch, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Param,
+  UseGuards,
+  Get,
+  Req,
+  Res,
+  NotFoundException,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import { QrService } from './qr.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -19,7 +30,9 @@ export class QrController {
   @Permissions('qr:generate')
   @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiOperation({ summary: 'Generate a QR token and return QR metadata (admin)' })
+  @ApiOperation({
+    summary: 'Generate a QR token and return QR metadata (admin)',
+  })
   async generate(@Param('unitId') unitId: string) {
     return this.qrService.createForUnit(unitId);
   }
@@ -41,7 +54,7 @@ export class QrController {
   async publicLookup(@Param('token') token: string, @Req() req: Request) {
     // record scan and return minimal unit info placeholder
     const ip = req.ip || (req.headers['x-forwarded-for'] as string) || '';
-    const device = req.headers['user-agent'] as string | undefined;
+    const device = req.headers['user-agent'];
     const result = await this.qrService.recordScan(token, device, ip);
 
     // TODO: load unit details from unit repository; for now return token metadata
@@ -81,8 +94,16 @@ export class QrController {
   @Roles('super_admin', 'company_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Admin: export printable PDF sheets of QR codes' })
-  async exportPdf(@Query('ids') idsQuery: string | undefined, @Res() res: Response) {
-    const ids = idsQuery ? idsQuery.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+  async exportPdf(
+    @Query('ids') idsQuery: string | undefined,
+    @Res() res: Response,
+  ) {
+    const ids = idsQuery
+      ? idsQuery
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
     try {
       const buffer = await this.qrService.exportPdf({ ids });
       res.setHeader('Content-Type', 'application/pdf');

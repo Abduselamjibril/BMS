@@ -7,7 +7,10 @@ export class CreateSiteDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'New York', description: 'City where the site is located' })
+  @ApiProperty({
+    example: 'New York',
+    description: 'City where the site is located',
+  })
   @IsString()
   @IsNotEmpty()
   city: string;
@@ -17,7 +20,10 @@ export class CreateSiteDto {
   @IsNotEmpty()
   subcity: string;
 
-  @ApiProperty({ example: '40.7128,-74.0060', description: 'Latitude and longitude of the site' })
+  @ApiProperty({
+    example: '40.7128,-74.0060',
+    description: 'Latitude and longitude of the site',
+  })
   @IsString()
   @IsNotEmpty()
   location_lat_long: string;

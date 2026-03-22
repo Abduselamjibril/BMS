@@ -6,11 +6,14 @@ import { UtilityMeter } from './entities/utility-meter.entity';
 import { MeterReading } from './entities/meter-reading.entity';
 import { Unit } from '../units/entities/unit.entity';
 import { Lease } from '../leases/entities/lease.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UtilityMeter, MeterReading, Unit, Lease]),
+    TypeOrmModule.forFeature([UtilityMeter, MeterReading, Unit, Lease, UserRole, BuildingAdminAssignment, Tenant]),
     NotificationsModule,
   ],
   providers: [UtilityService],

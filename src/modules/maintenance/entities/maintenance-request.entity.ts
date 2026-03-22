@@ -1,6 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  CreateDateColumn,
+} from 'typeorm';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
+import { WorkOrder } from './contractor-and-workorder.entity';
 
 export enum MaintenanceStatus {
   SUBMITTED = 'SUBMITTED',
@@ -29,11 +37,18 @@ export class MaintenanceRequest {
   @Column({ length: 20 })
   priority!: string; // e.g. high, medium, low
 
-  @Column({ type: 'enum', enum: MaintenanceStatus, default: MaintenanceStatus.SUBMITTED })
+  @Column({
+    type: 'enum',
+    enum: MaintenanceStatus,
+    default: MaintenanceStatus.SUBMITTED,
+  })
   status!: MaintenanceStatus;
 
   @Column({ type: 'text' })
   description!: string;
+
+  @OneToMany(() => WorkOrder, (workOrder) => workOrder.request)
+  workOrders!: WorkOrder[];
 
   @CreateDateColumn()
   created_at!: Date;

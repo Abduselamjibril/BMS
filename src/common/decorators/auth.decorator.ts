@@ -4,8 +4,5 @@ import { JwtAuthGuard } from '../../modules/common/guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 
 export function Auth() {
-  return applyDecorators(
-    UseGuards(JwtAuthGuard, RolesGuard),
-    ApiBearerAuth(),
-  );
+  return applyDecorators(UseGuards(JwtAuthGuard, RolesGuard), ApiBearerAuth());
 }

@@ -26,4 +26,24 @@ export class CreateVisitorDto {
   @IsOptional()
   @IsString()
   id_card_no?: string;
+
+  @ApiProperty({ example: 'Delivery', required: false })
+  @IsOptional()
+  @IsString()
+  purpose?: string;
+
+  @ApiProperty({ example: 'user-uuid', required: false })
+  @IsOptional()
+  @IsString()
+  host_user_id?: string;
+
+  @ApiProperty({ example: 'ABC-1234', required: false })
+  @IsOptional()
+  @IsString()
+  vehicle_number?: string;
+
+  @ApiProperty({ example: 'Leaving package at reception', required: false })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

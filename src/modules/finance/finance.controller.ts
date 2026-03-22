@@ -1,5 +1,16 @@
 import { Auth } from '../../common/decorators/auth.decorator';
-import { Controller, Post, Body, UseGuards, Get, Query, Patch, Delete, Param, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  Query,
+  Patch,
+  Delete,
+  Param,
+  Req,
+} from '@nestjs/common';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -11,27 +22,39 @@ import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PatchTaxRulesDto } from './dto/patch-tax-rules.dto';
 import { GenerateInvoicesDto } from './dto/generate-invoices.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiQuery, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiQuery,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 
 @ApiTags('Finance')
 @Controller('finance')
 @Auth()
 // @UseGuards(RolesGuard) // Uncomment if RolesGuard is available
 export class FinanceController {
-  constructor(private readonly financeService: FinanceService) { }
+  constructor(private readonly financeService: FinanceService) {}
 
   @Get('invoices/all')
   @Permissions('finance:invoices:all')
   @ApiOperation({ summary: 'List all invoices (no filters)' })
   @ApiResponse({ status: 200, description: 'All invoices.' })
-  async getAllInvoices() {
-    return this.financeService.getAllInvoices();
+  async getAllInvoices(@Req() req: any) {
+    return this.financeService.getAllInvoices(req.user);
   }
   @Get('invoices')
   @ApiOperation({ summary: 'Get invoices (scoped & filtered)' })
   @ApiResponse({ status: 200, description: 'Invoices list.' })
-  async getInvoices(@Query('building_id') building_id?: string, @Query('status') status?: string) {
-    return this.financeService.getInvoices(building_id, status);
+  async getInvoices(
+    @Req() req: any,
+    @Query('building_id') building_id?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.financeService.getInvoices(building_id, status, req.user);
   }
 
   @Patch('payments/:id/verify')
@@ -47,10 +70,13 @@ export class FinanceController {
   async verifyPayment(
     @Body() dto: VerifyPaymentDto,
     @Param('id') id: string,
-    @Req() req: any
+    @Req() req: any,
   ) {
     const verified_by = req.user.id;
-    return this.financeService.verifyPayment(id, { verified_by, status: dto.status });
+    return this.financeService.verifyPayment(id, {
+      verified_by,
+      status: dto.status,
+    });
   }
 
   @Patch('tax-rules')
@@ -193,7 +219,10 @@ export class FinanceController {
   @Permissions('finance:reports:revenue')
   @ApiOperation({ summary: 'Get revenue report' })
   @ApiResponse({ status: 200, description: 'Revenue report.' })
-  async getRevenueReport(@Query('building_id') building_id?: string, @Query('month') month?: string) {
+  async getRevenueReport(
+    @Query('building_id') building_id?: string,
+    @Query('month') month?: string,
+  ) {
     return this.financeService.getRevenueReport(building_id, month);
   }
 

@@ -25,7 +25,13 @@ import { UsersModule } from '../users/users.module';
       },
     }),
   ],
-  providers: [NotificationsService, PushNotificationService, DeviceTokenService, NotificationService, NotificationProcessor],
+  providers: [
+    NotificationsService,
+    PushNotificationService,
+    DeviceTokenService,
+    NotificationService,
+    NotificationProcessor,
+  ],
   controllers: [NotificationsController],
   exports: [NotificationsService],
 })

@@ -14,7 +14,12 @@ export class NotificationService {
     private readonly notificationQueue: Queue,
   ) {}
 
-  async notify(userId: string, title: string, message: string, data?: Record<string, any>) {
+  async notify(
+    userId: string,
+    title: string,
+    message: string,
+    data?: Record<string, any>,
+  ) {
     // Save notification to DB
     const notification = this.notificationRepo.create({
       user_id: userId,

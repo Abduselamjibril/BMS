@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -29,7 +33,8 @@ export class AuthService {
   async validateUser(loginDto: LoginDto, ip: string) {
     const user = await this.usersService.findByEmail(loginDto.email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
-    if (user.status === UserStatus.LOCKED) throw new ForbiddenException('Account locked. Contact Super Admin');
+    if (user.status === UserStatus.LOCKED)
+      throw new ForbiddenException('Account locked. Contact Super Admin');
     const valid = await bcrypt.compare(loginDto.password, user.password_hash);
     // Account locking logic
     if (!valid) {
@@ -38,7 +43,11 @@ export class AuthService {
         user.status = UserStatus.LOCKED;
       }
       await this.usersService.save(user);
-      await this.loginHistoryRepo.save({ user, ip_address: ip, success: false });
+      await this.loginHistoryRepo.save({
+        user,
+        ip_address: ip,
+        success: false,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
     user.failed_login_attempts = 0;
@@ -49,18 +58,31 @@ export class AuthService {
 
   async login(user: any) {
     // Load roles for this user
-    const userRoles = await this.userRoleRepo.find({ where: { user: { id: user.id } }, relations: ['role'] });
+    const userRoles = await this.userRoleRepo.find({
+      where: { user: { id: user.id } },
+      relations: ['role'],
+    });
     const roleIds = userRoles.map((ur) => (ur.role as any).id);
     const roleNames = userRoles.map((ur) => (ur.role as any).name);
 
     // Load permissions assigned to these roles
     let permissionCodes: string[] = [];
     if (roleIds.length > 0) {
-      const rolePerms = await this.rolePermissionRepo.find({ where: { role: { id: In(roleIds) } } as any, relations: ['permission'] as any });
-      permissionCodes = Array.from(new Set(rolePerms.map((rp) => (rp.permission as any).code)));
+      const rolePerms = await this.rolePermissionRepo.find({
+        where: { role: { id: In(roleIds) } } as any,
+        relations: ['permission'] as any,
+      });
+      permissionCodes = Array.from(
+        new Set(rolePerms.map((rp) => (rp.permission as any).code)),
+      );
     }
 
-    const payload = { sub: user.id, email: user.email, roles: roleNames, permissions: permissionCodes };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      roles: roleNames,
+      permissions: permissionCodes,
+    };
     return {
       access_token: this.jwtService.sign(payload),
     };
@@ -68,15 +90,28 @@ export class AuthService {
 
   async refreshToken(user: any) {
     // same enrichment as login
-    const userRoles = await this.userRoleRepo.find({ where: { user: { id: user.id } }, relations: ['role'] });
+    const userRoles = await this.userRoleRepo.find({
+      where: { user: { id: user.id } },
+      relations: ['role'],
+    });
     const roleIds = userRoles.map((ur) => (ur.role as any).id);
     const roleNames = userRoles.map((ur) => (ur.role as any).name);
     let permissionCodes: string[] = [];
     if (roleIds.length > 0) {
-      const rolePerms = await this.rolePermissionRepo.find({ where: { role: { id: In(roleIds) } } as any, relations: ['permission'] as any });
-      permissionCodes = Array.from(new Set(rolePerms.map((rp) => (rp.permission as any).code)));
+      const rolePerms = await this.rolePermissionRepo.find({
+        where: { role: { id: In(roleIds) } } as any,
+        relations: ['permission'] as any,
+      });
+      permissionCodes = Array.from(
+        new Set(rolePerms.map((rp) => (rp.permission as any).code)),
+      );
     }
-    const payload = { sub: user.id, email: user.email, roles: roleNames, permissions: permissionCodes };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      roles: roleNames,
+      permissions: permissionCodes,
+    };
     return { access_token: this.jwtService.sign(payload) };
   }
 

@@ -8,12 +8,20 @@ export class CreateTenantDocumentDto {
   @IsUUID()
   tenant_id!: string;
 
-  @ApiProperty({ enum: TenantDocumentType, example: TenantDocumentType.PRIMARY_ID })
-  @Transform(({ value }) => (value === 'PRIMARY_ID' ? TenantDocumentType.PRIMARY_ID : value))
+  @ApiProperty({
+    enum: TenantDocumentType,
+    example: TenantDocumentType.PRIMARY_ID,
+  })
+  @Transform(({ value }) =>
+    value === 'PRIMARY_ID' ? TenantDocumentType.PRIMARY_ID : value,
+  )
   @IsEnum(TenantDocumentType)
   type!: TenantDocumentType;
 
-  @ApiProperty({ example: '/public/tenant-documents/your-file.pdf', required: false })
+  @ApiProperty({
+    example: '/public/tenant-documents/your-file.pdf',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   file_url!: string;

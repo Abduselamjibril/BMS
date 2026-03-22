@@ -26,6 +26,7 @@ async function bootstrap() {
     { name: 'admin', description: 'Organization Admin', type: 'system' },
     { name: 'site_admin', description: 'Site-level Admin', type: 'system' },
     { name: 'contractor', description: 'Contractor', type: 'system' },
+    { name: 'tenant', description: 'Default Tenant Role', type: 'system' },
   ];
   // Ensure Postgres enum type contains our role names (safe: ignore errors)
   try {
@@ -84,6 +85,8 @@ async function bootstrap() {
     { code: 'sites:delete', description: 'Delete sites' },
     // Tenant applications / documents / announcements
     { code: 'applications:review', description: 'Review tenant applications' },
+    { code: 'applications:approve', description: 'Approve tenant applications and create draft leases' },
+    { code: 'applications:reject', description: 'Reject tenant applications' },
     { code: 'documents:verify', description: 'Verify or reject tenant documents' },
     { code: 'announcements:create', description: 'Create announcements' },
     // Building management
@@ -197,7 +200,7 @@ async function bootstrap() {
         'leases:create','leases:activate','leases:terminate','leases:renew',
         'finance:invoices:create','finance:invoices:all','finance:payments:verify','finance:tax_rules:update','finance:invoices:void','finance:bank_accounts:create','finance:invoices:generate','finance:reports:revenue','finance:reports:tax',
         'documents:delete','documents:history','documents:search',
-        'applications:review','documents:verify','announcements:create',
+        'applications:review','applications:approve','applications:reject','documents:verify','announcements:create',
         'units:create','units:read','units:update','units:delete','units:bulk_upload','units:amenities_link','units:amenities_remove',
         'amenities:create','amenities:read','amenities:update','amenities:delete','amenities:link_building','amenities:remove_building','amenities:link_unit','amenities:remove_unit',
         'reports:view','reports:dashboard','reports:financial','reports:occupancy',
@@ -249,6 +252,36 @@ async function bootstrap() {
         }
       }
       console.log('Mapped default contractor permissions');
+    }
+
+    // Map permissions for tenant role
+    const tenantRoleSeed = await roleRepo.findOne({ where: { name: 'tenant' } });
+    if (tenantRoleSeed) {
+      const tenantPermCodes = [
+        'maintenance:requests:create',
+        'maintenance:requests:read',
+        'maintenance:requests:update',
+        'maintenance:feedback:create',
+        'documents:history',
+        'documents:upload',
+        'documents:search',
+        'messages:send',
+        'applications:review',
+        'finance:invoices:read',
+        'finance:payments:create',
+        'visitors:read',
+        'visitors:create',
+        'utilities:meters:read',
+        'utilities:readings:read',
+      ];
+      for (const code of tenantPermCodes) {
+        const p = allPerms.find((x) => x.code === code);
+        if (p) {
+          const exists = await rolePermRepo.findOne({ where: { role: { id: tenantRoleSeed.id }, permission: { id: p.id } } });
+          if (!exists) await rolePermRepo.save({ role: tenantRoleSeed, permission: p });
+        }
+      }
+      console.log('Mapped default tenant permissions');
     }
   } catch (e) {
     console.warn('Could not map role permissions:', e.message || e);

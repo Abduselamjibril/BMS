@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  Min,
+} from 'class-validator';
 import { BillingCycle } from '../entities/lease.entity';
 
 export class RenewLeaseDto {
@@ -22,7 +28,11 @@ export class RenewLeaseDto {
   @Min(0)
   service_charge?: number;
 
-  @ApiProperty({ enum: BillingCycle, default: BillingCycle.MONTHLY, required: false })
+  @ApiProperty({
+    enum: BillingCycle,
+    default: BillingCycle.MONTHLY,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(BillingCycle)
   billing_cycle?: BillingCycle;

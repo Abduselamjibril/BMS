@@ -15,7 +15,10 @@ import {
 } from './entities/tenant-application.entity';
 import { TenantDocument } from './entities/tenant-document.entity';
 import { Message } from './entities/message.entity';
-import { Announcement, AnnouncementTarget } from './entities/announcement.entity';
+import {
+  Announcement,
+  AnnouncementTarget,
+} from './entities/announcement.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { User, UserStatus } from '../users/entities/user.entity';
@@ -29,6 +32,8 @@ import { VerifyDocumentDto } from './dto/verify-document.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UserRole } from '../roles/entities/user-role.entity';
+import { Role } from '../roles/entities/role.entity';
+import { LeasesService } from '../leases/leases.service';
 // RoleName enum removed
 
 @Injectable()
@@ -56,21 +61,30 @@ export class TenantsService {
     private readonly siteRepository: Repository<Site>,
     @InjectRepository(UserRole)
     private readonly userRoleRepository: Repository<UserRole>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
     private readonly notificationsService: NotificationsService,
+    private readonly leasesService: LeasesService,
   ) {}
 
   async register(dto: RegisterTenantDto): Promise<Tenant> {
-    const userEmailExists = await this.userRepository.findOne({ where: { email: dto.email } });
+    const userEmailExists = await this.userRepository.findOne({
+      where: { email: dto.email },
+    });
     if (userEmailExists) {
       throw new ConflictException('Email already in use');
     }
 
-    const tenantPhoneExists = await this.tenantRepository.findOne({ where: { phone: dto.phone } });
+    const tenantPhoneExists = await this.tenantRepository.findOne({
+      where: { phone: dto.phone },
+    });
     if (tenantPhoneExists) {
       throw new ConflictException('Phone already in use');
     }
 
-    const tenantEmailExists = await this.tenantRepository.findOne({ where: { email: dto.email } });
+    const tenantEmailExists = await this.tenantRepository.findOne({
+      where: { email: dto.email },
+    });
     if (tenantEmailExists) {
       throw new ConflictException('Tenant email already in use');
     }
@@ -83,6 +97,24 @@ export class TenantsService {
     });
 
     const savedUser = await this.userRepository.save(user);
+
+    let tenantRole = await this.roleRepository.findOne({
+      where: { name: 'tenant' },
+    });
+    if (!tenantRole) {
+      tenantRole = this.roleRepository.create({
+        name: 'tenant',
+        type: 'system' as any,
+        description: 'Default Tenant Role',
+      });
+      await this.roleRepository.save(tenantRole);
+    }
+
+    const userRole = this.userRoleRepository.create({
+      user: savedUser,
+      role: tenantRole,
+    });
+    await this.userRoleRepository.save(userRole);
 
     const tenant = this.tenantRepository.create({
       user: savedUser,
@@ -114,13 +146,73 @@ export class TenantsService {
     });
   }
 
-  async createApplication(dto: CreateTenantApplicationDto): Promise<TenantApplication> {
-    const tenant = await this.tenantRepository.findOne({ where: { id: dto.tenant_id } });
+  async updateTenant(id: string, dto: Record<string, any>): Promise<Tenant> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
 
-    const unit = await this.unitRepository.findOne({ where: { id: dto.unit_id }, relations: ['building'] });
+    if (dto.email && dto.email !== tenant.email) {
+      const emailExists = await this.tenantRepository.findOne({
+        where: { email: dto.email },
+      });
+      if (emailExists) throw new ConflictException('Email already in use');
+      tenant.email = dto.email;
+      if (tenant.user) {
+        tenant.user.email = dto.email;
+        await this.userRepository.save(tenant.user);
+      }
+    }
+
+    if (dto.phone && dto.phone !== tenant.phone) {
+      const phoneExists = await this.tenantRepository.findOne({
+        where: { phone: dto.phone },
+      });
+      if (phoneExists) throw new ConflictException('Phone already in use');
+      tenant.phone = dto.phone;
+    }
+
+    if (dto.first_name !== undefined) {
+      tenant.first_name = dto.first_name;
+    }
+    if (dto.last_name !== undefined) {
+      tenant.last_name = dto.last_name;
+    }
+
+    if (
+      tenant.user &&
+      (dto.first_name !== undefined || dto.last_name !== undefined)
+    ) {
+      tenant.user.name =
+        `${tenant.first_name} ${tenant.last_name || ''}`.trim();
+      await this.userRepository.save(tenant.user);
+    }
+
+    if (dto.tin_number !== undefined) tenant.tin_number = dto.tin_number;
+    if (dto.vat_reg_number !== undefined)
+      tenant.vat_reg_number = dto.vat_reg_number;
+    if (dto.status !== undefined) tenant.status = dto.status;
+
+    return this.tenantRepository.save(tenant);
+  }
+
+  async createApplication(
+    dto: CreateTenantApplicationDto,
+  ): Promise<TenantApplication> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: dto.tenant_id },
+    });
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const unit = await this.unitRepository.findOne({
+      where: { id: dto.unit_id },
+      relations: ['building'],
+    });
     if (!unit) {
       throw new NotFoundException('Unit not found');
     }
@@ -129,13 +221,17 @@ export class TenantsService {
       throw new BadRequestException('Unit must be vacant for application');
     }
 
-    const building = await this.buildingRepository.findOne({ where: { id: dto.building_id } });
+    const building = await this.buildingRepository.findOne({
+      where: { id: dto.building_id },
+    });
     if (!building) {
       throw new NotFoundException('Building not found');
     }
 
     if (unit.building.id !== building.id) {
-      throw new BadRequestException('Unit does not belong to the selected building');
+      throw new BadRequestException(
+        'Unit does not belong to the selected building',
+      );
     }
 
     const activeApplication = await this.applicationRepository.findOne({
@@ -167,29 +263,129 @@ export class TenantsService {
 
   async listPendingApplications(): Promise<TenantApplication[]> {
     return this.applicationRepository.find({
-      where: { status: In([TenantApplicationStatus.SUBMITTED, TenantApplicationStatus.REVIEWING]) },
+      where: {
+        status: In([
+          TenantApplicationStatus.SUBMITTED,
+          TenantApplicationStatus.REVIEWING,
+        ]),
+      },
       relations: ['tenant', 'unit', 'building', 'reviewed_by'],
       order: { created_at: 'DESC' },
     });
   }
 
-  async verifyDocument(id: string, dto: VerifyDocumentDto): Promise<TenantDocument> {
+  async verifyDocument(
+    id: string,
+    dto: VerifyDocumentDto,
+  ): Promise<TenantDocument> {
     const document = await this.documentRepository.findOne({ where: { id } });
     if (!document) {
       throw new NotFoundException('Document not found');
     }
 
     if (!dto.verified && !dto.reject_reason) {
-      throw new BadRequestException('reject_reason is required when verification is rejected');
+      throw new BadRequestException(
+        'reject_reason is required when verification is rejected',
+      );
     }
 
     document.verified = dto.verified;
-    document.reject_reason = dto.verified ? null as unknown as string : dto.reject_reason;
+    document.reject_reason = dto.verified
+      ? (null as unknown as string)
+      : dto.reject_reason;
     return this.documentRepository.save(document);
   }
 
-  async createTenantDocument(dto: CreateTenantDocumentDto): Promise<TenantDocument> {
-    const tenant = await this.tenantRepository.findOne({ where: { id: dto.tenant_id } });
+  async approveApplication(id: string): Promise<TenantApplication> {
+    const application = await this.applicationRepository.findOne({
+      where: { id },
+      relations: ['tenant', 'unit', 'building'],
+    });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (
+      application.status !== TenantApplicationStatus.SUBMITTED &&
+      application.status !== TenantApplicationStatus.REVIEWING
+    ) {
+      throw new BadRequestException(
+        'Only submitted or reviewing applications can be approved',
+      );
+    }
+
+    application.status = TenantApplicationStatus.APPROVED;
+    application.reviewed_at = new Date();
+    await this.applicationRepository.save(application);
+
+    // Auto-create a draft lease
+    try {
+      const startDate = application.move_in_date;
+      const start = new Date(startDate);
+      const end = new Date(start);
+      end.setFullYear(end.getFullYear() + 1);
+      end.setDate(end.getDate() - 1);
+
+      await this.leasesService.create({
+        tenant_id: application.tenant.id,
+        unit_id: application.unit.id,
+        building_id: application.building.id,
+        start_date: startDate,
+        end_date: end.toISOString().split('T')[0],
+        rent_amount: Number(application.unit.rent_price) || 0,
+        service_charge: 0,
+      });
+    } catch (err) {
+      // In a production environment, we might want to handle this differently,
+      // but here we allow the application approval to stand even if lease creation fails
+      console.error('Failed to auto-create draft lease:', err.message);
+    }
+
+    return application;
+  }
+
+  async rejectApplication(id: string): Promise<TenantApplication> {
+    const application = await this.applicationRepository.findOne({
+      where: { id },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    application.status = TenantApplicationStatus.REJECTED;
+    application.reviewed_at = new Date();
+    return this.applicationRepository.save(application);
+  }
+
+  async createTenantDocument(
+    dto: CreateTenantDocumentDto,
+    authenticatedUser?: any,
+  ): Promise<TenantDocument> {
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepository.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('tenant')) {
+        const tenant = await this.tenantRepository.findOne({
+          where: { user: { id: currentUserId } },
+        });
+        if (!tenant || tenant.id !== dto.tenant_id) {
+          throw new ForbiddenException(
+            'You can only upload documents for yourself',
+          );
+        }
+      }
+    }
+
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: dto.tenant_id },
+    });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
@@ -204,8 +400,30 @@ export class TenantsService {
     return this.documentRepository.save(document);
   }
 
-  async listTenantDocuments(tenantId?: string): Promise<any[]> {
-    const where = tenantId ? { tenant: { id: tenantId } } : {};
+  async listTenantDocuments(
+    tenantId?: string,
+    authenticatedUser?: any,
+  ): Promise<any[]> {
+    let finalTenantId = tenantId;
+
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepository.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('tenant')) {
+        const tenant = await this.tenantRepository.findOne({
+          where: { user: { id: currentUserId } },
+        });
+        if (!tenant) return [];
+        finalTenantId = tenant.id;
+      }
+    }
+
+    const where = finalTenantId ? { tenant: { id: finalTenantId } } : {};
     const documents = await this.documentRepository.find({
       where,
       relations: ['tenant'],
@@ -223,8 +441,13 @@ export class TenantsService {
     }));
   }
 
-  async createAnnouncement(dto: CreateAnnouncementDto, creatorUserId: string): Promise<Announcement> {
-    const creator = await this.userRepository.findOne({ where: { id: creatorUserId } });
+  async createAnnouncement(
+    dto: CreateAnnouncementDto,
+    creatorUserId: string,
+  ): Promise<Announcement> {
+    const creator = await this.userRepository.findOne({
+      where: { id: creatorUserId },
+    });
     if (!creator) {
       throw new NotFoundException('Creator user not found');
     }
@@ -234,9 +457,13 @@ export class TenantsService {
 
     if (dto.target === AnnouncementTarget.BUILDING) {
       if (!dto.building_id) {
-        throw new BadRequestException('building_id is required when target is building');
+        throw new BadRequestException(
+          'building_id is required when target is building',
+        );
       }
-      const foundBuilding = await this.buildingRepository.findOne({ where: { id: dto.building_id } });
+      const foundBuilding = await this.buildingRepository.findOne({
+        where: { id: dto.building_id },
+      });
       if (!foundBuilding) {
         throw new NotFoundException('Building not found');
       }
@@ -245,9 +472,13 @@ export class TenantsService {
 
     if (dto.target === AnnouncementTarget.SITE) {
       if (!dto.site_id) {
-        throw new BadRequestException('site_id is required when target is site');
+        throw new BadRequestException(
+          'site_id is required when target is site',
+        );
       }
-      const foundSite = await this.siteRepository.findOne({ where: { id: dto.site_id } });
+      const foundSite = await this.siteRepository.findOne({
+        where: { id: dto.site_id },
+      });
       if (!foundSite) {
         throw new NotFoundException('Site not found');
       }
@@ -263,24 +494,33 @@ export class TenantsService {
       created_by: creator,
     });
 
-    const savedAnnouncement = await this.announcementRepository.save(announcement);
+    const savedAnnouncement =
+      await this.announcementRepository.save(announcement);
 
     // Bulk notify users based on target
     let userIds: string[] = [];
     if (dto.target === AnnouncementTarget.BUILDING && dto.building_id) {
       // Find all tenants in the building via active leases
-      const leases = await this.leaseRepository.find({ where: { building: { id: dto.building_id }, status: 'active' }, relations: ['tenant'] });
-      userIds = leases.map(l => l.tenant.id);
+      const leases = await this.leaseRepository.find({
+        where: { building: { id: dto.building_id }, status: 'active' },
+        relations: ['tenant'],
+      });
+      userIds = leases.map((l) => l.tenant.id);
     } else if (dto.target === AnnouncementTarget.SITE && dto.site_id) {
       // Find all tenants in the site via active leases
-      const buildings = await this.buildingRepository.find({ where: { site: { id: dto.site_id } } });
-      const buildingIds = buildings.map(b => b.id);
-      const leases = await this.leaseRepository.find({ where: { building: { id: In(buildingIds) }, status: 'active' }, relations: ['tenant'] });
-      userIds = leases.map(l => l.tenant.id);
+      const buildings = await this.buildingRepository.find({
+        where: { site: { id: dto.site_id } },
+      });
+      const buildingIds = buildings.map((b) => b.id);
+      const leases = await this.leaseRepository.find({
+        where: { building: { id: In(buildingIds) }, status: 'active' },
+        relations: ['tenant'],
+      });
+      userIds = leases.map((l) => l.tenant.id);
     } else if (dto.target === AnnouncementTarget.ALL) {
       // All tenants
       const tenants = await this.tenantRepository.find();
-      userIds = tenants.map(t => t.id);
+      userIds = tenants.map((t) => t.id);
     }
     for (const userId of userIds) {
       await this.notificationsService.notify(
@@ -288,13 +528,16 @@ export class TenantsService {
         'Announcement',
         dto.title + '\n' + dto.message,
         NotificationType.ANNOUNCEMENT,
-        { announcementId: savedAnnouncement.id, target: dto.target }
+        { announcementId: savedAnnouncement.id, target: dto.target },
       );
     }
     return savedAnnouncement;
   }
 
-  async findAnnouncements(siteId?: string, buildingId?: string): Promise<any[]> {
+  async findAnnouncements(
+    siteId?: string,
+    buildingId?: string,
+  ): Promise<any[]> {
     const query = this.announcementRepository
       .createQueryBuilder('announcement')
       .leftJoinAndSelect('announcement.site', 'site')
@@ -343,13 +586,21 @@ export class TenantsService {
     }));
   }
 
-  async sendMessage(dto: SendMessageDto, senderUserId: string): Promise<Message> {
-    const sender = await this.userRepository.findOne({ where: { id: senderUserId } });
+  async sendMessage(
+    dto: SendMessageDto,
+    senderUserId: string,
+  ): Promise<Message> {
+    const sender = await this.userRepository.findOne({
+      where: { id: senderUserId },
+    });
     if (!sender) {
       throw new NotFoundException('Sender not found');
     }
 
-    const tenant = await this.tenantRepository.findOne({ where: { id: dto.tenant_id }, relations: ['user'] });
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: dto.tenant_id },
+      relations: ['user'],
+    });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
@@ -364,8 +615,14 @@ export class TenantsService {
     return this.messageRepository.save(message);
   }
 
-  async getChatHistory(tenantId: string, currentUserId: string): Promise<any[]> {
-    const tenant = await this.tenantRepository.findOne({ where: { id: tenantId }, relations: ['user'] });
+  async getChatHistory(
+    tenantId: string,
+    currentUserId: string,
+  ): Promise<any[]> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: tenantId },
+      relations: ['user'],
+    });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
@@ -395,7 +652,8 @@ export class TenantsService {
     }
 
     const unreadForCurrent = messages.filter(
-      (message) => message.receiver.id === currentUserId && !message.read_status,
+      (message) =>
+        message.receiver.id === currentUserId && !message.read_status,
     );
 
     if (unreadForCurrent.length > 0) {

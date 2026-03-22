@@ -1,7 +1,14 @@
 import { Building } from '../../buildings/entities/building.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { User } from '../../users/entities/user.entity';
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Tenant } from './tenant.entity';
 
 export enum TenantApplicationStatus {

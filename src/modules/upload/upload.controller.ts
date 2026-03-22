@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Post,
@@ -18,16 +17,12 @@ import {
   ApiParam,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import {
-  FileInterceptor,
-  MulterModule,
-} from '@nestjs/platform-express';
+import { FileInterceptor, MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { UploadService } from './upload.service';
 import { Auth } from '../../common/decorators/auth.decorator';
-
 
 @ApiTags('Upload')
 @Controller('upload')
@@ -61,7 +56,10 @@ export class UploadController {
       }),
       fileFilter: (req, file, cb) => {
         if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
-          return cb(new HttpException('Only JPEG/PNG allowed', HttpStatus.BAD_REQUEST), false);
+          return cb(
+            new HttpException('Only JPEG/PNG allowed', HttpStatus.BAD_REQUEST),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -100,8 +98,16 @@ export class UploadController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.mimetype)) {
-          return cb(new HttpException('Only PDF/DOCX allowed', HttpStatus.BAD_REQUEST), false);
+        if (
+          ![
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ].includes(file.mimetype)
+        ) {
+          return cb(
+            new HttpException('Only PDF/DOCX allowed', HttpStatus.BAD_REQUEST),
+            false,
+          );
         }
         cb(null, true);
       },

@@ -12,7 +12,12 @@ import { Permission } from '../roles/entities/permission.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([LoginHistory, UserRole, RolePermission, Permission]),
+    TypeOrmModule.forFeature([
+      LoginHistory,
+      UserRole,
+      RolePermission,
+      Permission,
+    ]),
     UsersModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'defaultSecret',

@@ -9,7 +9,9 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { Contractor } from '../maintenance/entities/contractor-and-workorder.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, LoginHistory, Role, UserRole, Contractor])],
+  imports: [
+    TypeOrmModule.forFeature([User, LoginHistory, Role, UserRole, Contractor]),
+  ],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

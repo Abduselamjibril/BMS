@@ -16,7 +16,10 @@ export class SettingsService {
     return this.settingsRepo.findOne({ where: {} });
   }
 
-  async updateSettings(dto: Partial<OrganizationSettings>, logo?: Express.Multer.File): Promise<OrganizationSettings> {
+  async updateSettings(
+    dto: Partial<OrganizationSettings>,
+    logo?: Express.Multer.File,
+  ): Promise<OrganizationSettings> {
     let settings = await this.settingsRepo.findOne({ where: {} });
     if (logo) {
       // Save the file to a static directory (e.g., public/logos)

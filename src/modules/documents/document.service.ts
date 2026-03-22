@@ -5,6 +5,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DataSource } from 'typeorm';
 import { Document, DocumentVersion } from './entities/document.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { Lease } from '../leases/entities/lease.entity';
+import { Payment } from '../finance/entities/payment.entity';
+import { UserBuilding } from '../users/entities/user-building.entity';
 
 @Injectable()
 export class DocumentService {
@@ -13,32 +18,56 @@ export class DocumentService {
     private readonly documentRepo: Repository<Document>,
     @InjectRepository(DocumentVersion)
     private readonly versionRepo: Repository<DocumentVersion>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async uploadDocument(dto: any, file: Express.Multer.File) {
-    // Save file to disk, metadata to DB
+  async uploadDocument(dto: any, file: Express.Multer.File, authorId?: string) {
+    let targetModuleId = dto.module_id;
+    let targetModuleType = dto.module_type;
+
+    // Security check: if tenant, the module_id should be their tenant ID
+    if (authorId) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authorId } },
+        relations: ['role'],
+      });
+      const isTenant = userRoles.some((ur) => ur.role.name === 'tenant');
+      if (isTenant) {
+        const tenant = await this.tenantRepo.findOne({
+          where: { user: { id: authorId } },
+        });
+        if (tenant) {
+          targetModuleId = tenant.id;
+          targetModuleType = 'tenant';
+        }
+      }
+    }
+
     const doc = this.documentRepo.create({
       file_name: file.originalname,
       mime_type: file.mimetype,
       file_size: file.size,
       storage_path: file.path,
-      module_type: dto.module_type,
-      module_id: dto.module_id,
+      module_type: targetModuleType,
+      module_id: targetModuleId,
       version: 1,
       is_deleted: false,
     });
     const savedDoc = await this.documentRepo.save(doc);
 
     // Notify manager/admin if document is uploaded for compliance
-    if (dto.module_type === 'tenant' && dto.manager_id) {
+    if (targetModuleType === 'tenant' && dto.manager_id) {
       await this.notificationsService.notify(
         dto.manager_id,
         'Document Uploaded',
-        `A new document has been uploaded by tenant ${dto.tenant_id}.`,
+        `A new document has been uploaded by tenant ${targetModuleId}.`,
         NotificationType.SYSTEM,
-        { documentId: savedDoc.id, tenantId: dto.tenant_id }
+        { documentId: savedDoc.id, tenantId: targetModuleId },
       );
     }
     return savedDoc;
@@ -62,26 +91,138 @@ export class DocumentService {
     return this.documentRepo.save(doc);
   }
 
-  async searchDocuments(filters: any) {
-    // Always exclude deleted documents
-    const baseFilters = { ...filters, is_deleted: false };
-    // Scoped access: nominee admins only see docs for assigned buildings
-    if (filters.user && filters.user.role === 'nominee_admin') {
-      // Find assigned buildings
-      const assignments = await this.dataSource.getRepository('UserBuilding').find({ where: { user: { id: filters.user.id } }, relations: ['building'] });
-      const buildingIds = assignments.map(a => a.building.id);
-      // Filter documents for these buildings
-      return this.documentRepo.createQueryBuilder('document')
-        .where('document.module_type = :moduleType AND document.module_id IN (:...buildingIds) AND document.is_deleted = false', { moduleType: 'building', buildingIds })
-        .getMany();
+  async searchDocuments(filters: any, authenticatedUser?: any) {
+    const { user, ...rest } = filters;
+    const authUser = authenticatedUser || user;
+
+    if (!authUser) {
+      return this.documentRepo.find({ where: { ...rest, is_deleted: false } });
     }
-    // Tenants and super admins: fallback to filters
-    return this.documentRepo.find({ where: baseFilters });
+
+    const currentUserId = authUser.id || authUser.sub;
+    const userRoles = await this.userRoleRepo.find({
+      where: { user: { id: currentUserId } },
+      relations: ['role'],
+    });
+    const roleNames = userRoles.map((ur) => ur.role.name);
+
+    const query = this.documentRepo
+      .createQueryBuilder('document')
+      .where('document.is_deleted = false');
+
+    // 1. Super Admin: Filter by provided criteria only
+    if (roleNames.includes('super_admin')) {
+      if (rest.module_type)
+        query.andWhere('document.module_type = :mt', { mt: rest.module_type });
+      if (rest.module_id)
+        query.andWhere('document.module_id = :mid', { mid: rest.module_id });
+      if (rest.file_name)
+        query.andWhere('document.file_name LIKE :fn', {
+          fn: `%${rest.file_name}%`,
+        });
+    }
+    // 2. Nominee Admin: Filter by assigned buildings
+    else if (roleNames.includes('nominee_admin')) {
+      const assignments = await this.dataSource
+        .getRepository(UserBuilding)
+        .find({
+          where: { user: { id: currentUserId } },
+          relations: ['building'],
+        });
+      const buildingIds = assignments.map((a) => a.building.id);
+
+      // They see documents for their buildings, or tenant docs for tenants in their buildings
+      // For now, simplify to building-scoped docs if searching for building docs
+      if (rest.module_type === 'building' || !rest.module_type) {
+        query.andWhere(
+          'document.module_type = :mt AND document.module_id IN (:...bids)',
+          { mt: 'building', bids: buildingIds },
+        );
+      } else {
+        // restricted search
+        query.andWhere('document.module_id IN (:...bids)', {
+          bids: buildingIds,
+        });
+      }
+    }
+    // 3. Tenant: Filter by their own tenant ID, associated lease IDs, or payment IDs
+    else if (roleNames.includes('tenant')) {
+      const tenant = await this.tenantRepo.findOne({
+        where: { user: { id: currentUserId } },
+      });
+      if (!tenant) return [];
+
+      const leases = await this.dataSource.getRepository(Lease).find({
+        where: { tenant: { id: tenant.id } },
+        select: ['id'],
+      });
+      const leaseIds = leases.map((l) => l.id);
+
+      const payments = await this.dataSource.getRepository(Payment).find({
+        where: { invoice: { tenant: { id: tenant.id } } },
+        select: ['id'],
+      });
+      const paymentIds = payments.map((p) => p.id);
+
+      const conditions: string[] = [
+        '(document.module_id = :tid AND document.module_type = :tmt)',
+      ];
+      const params: any = { tid: tenant.id, tmt: 'tenant' };
+
+      if (leaseIds.length > 0) {
+        conditions.push(
+          '(document.module_id IN (:...lids) AND document.module_type = :lmt)',
+        );
+        params.lids = leaseIds;
+        params.lmt = 'lease';
+      }
+      if (paymentIds.length > 0) {
+        conditions.push(
+          '(document.module_id IN (:...pids) AND document.module_type = :pmt)',
+        );
+        params.pids = paymentIds;
+        params.pmt = 'payment';
+      }
+
+      query.andWhere(`(${conditions.join(' OR ')})`, params);
+    } else {
+      // Default fallback
+      if (rest.module_type)
+        query.andWhere('document.module_type = :mt', { mt: rest.module_type });
+      if (rest.module_id)
+        query.andWhere('document.module_id = :mid', { mid: rest.module_id });
+    }
+
+    const docs = await query.getMany();
+    
+    // Enrich with labels
+    const enriched = await Promise.all(docs.map(async (doc) => {
+      let label = doc.module_id;
+      try {
+        if (doc.module_type === 'building') {
+          const b = await this.dataSource.getRepository('Building').findOne({ where: { id: doc.module_id } });
+          if (b) label = (b as any).name || (b as any).code || label;
+        } else if (doc.module_type === 'tenant') {
+          const t = await this.dataSource.getRepository('Tenant').findOne({ where: { id: doc.module_id } });
+          if (t) label = `${(t as any).first_name || ''} ${(t as any).last_name || ''}`.trim() || (t as any).email || label;
+        } else if (doc.module_type === 'lease') {
+          const l = await this.dataSource.getRepository('Lease').findOne({ where: { id: doc.module_id }, relations: ['unit'] });
+          if (l) label = `Lease: Unit ${(l as any).unit?.unit_number || 'N/A'}`;
+        }
+      } catch (e) { /* ignore enrichment failures */ }
+      
+      return { ...doc, module_label: label };
+    }));
+
+    return enriched;
   }
 
   async getDocumentHistory(id: string) {
     // List all previous versions
-    return this.versionRepo.find({ where: { document_id: id }, order: { version_number: 'DESC' } });
+    return this.versionRepo.find({
+      where: { document_id: id },
+      order: { version_number: 'DESC' },
+    });
   }
 
   async softDeleteDocument(id: string) {

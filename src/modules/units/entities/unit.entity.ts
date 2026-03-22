@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { UnitAmenity } from '../../amenities/entities/unit-amenity.entity';
 

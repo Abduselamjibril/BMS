@@ -1,16 +1,24 @@
-
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+} from 'class-validator';
 import { UnitType, UnitStatus } from '../entities/unit.entity';
 
 export class CreateUnitDto {
-
   @ApiProperty({ description: 'Unit number', example: '101' })
   @IsString()
   @IsNotEmpty()
   unit_number!: string;
 
-  @ApiProperty({ description: 'Unit type', enum: UnitType, example: UnitType.ONE_BEDROOM })
+  @ApiProperty({
+    description: 'Unit type',
+    enum: UnitType,
+    example: UnitType.ONE_BEDROOM,
+  })
   @IsEnum(UnitType)
   type!: UnitType;
 
@@ -22,7 +30,11 @@ export class CreateUnitDto {
   @IsNumber()
   size_sqm!: number;
 
-  @ApiProperty({ description: 'Status', enum: UnitStatus, example: UnitStatus.VACANT })
+  @ApiProperty({
+    description: 'Status',
+    enum: UnitStatus,
+    example: UnitStatus.VACANT,
+  })
   @IsEnum(UnitStatus)
   status!: UnitStatus;
 
@@ -34,12 +46,19 @@ export class CreateUnitDto {
   @IsNumber()
   bathrooms!: number;
 
-  @ApiProperty({ description: 'Building ID', example: 'a097e608-8df2-4716-85af-61df209ef5fc' })
+  @ApiProperty({
+    description: 'Building ID',
+    example: 'a097e608-8df2-4716-85af-61df209ef5fc',
+  })
   @IsString()
   @IsNotEmpty()
   buildingId!: string;
 
-  @ApiProperty({ description: 'Description', required: false, example: 'Corner unit' })
+  @ApiProperty({
+    description: 'Description',
+    required: false,
+    example: 'Corner unit',
+  })
   @IsString()
   @IsOptional()
   description?: string;

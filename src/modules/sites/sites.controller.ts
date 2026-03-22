@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -11,7 +20,7 @@ import { UpdateSiteDto } from './dto/update-site.dto';
 @Controller('sites')
 @Auth()
 export class SitesController {
-  constructor(private readonly sitesService: SitesService) { }
+  constructor(private readonly sitesService: SitesService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a site' })

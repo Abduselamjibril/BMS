@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -16,17 +21,18 @@ export class RolesGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
-    const hasRequiredPermissions = requiredPermissions && requiredPermissions.length > 0;
+    const hasRequiredPermissions =
+      requiredPermissions && requiredPermissions.length > 0;
     const hasRequiredRoles = requiredRoles && requiredRoles.length > 0;
 
     // If neither is required, allow access
@@ -38,8 +44,12 @@ export class RolesGuard implements CanActivate {
 
     // Load user roles
     const userRoleRepo = this.dataSource.getRepository(UserRole);
-    const userRoles = await userRoleRepo.find({ where: { user: { id: user.id } }, relations: ['role'] });
-    if (!userRoles || userRoles.length === 0) throw new ForbiddenException('Insufficient permissions');
+    const userRoles = await userRoleRepo.find({
+      where: { user: { id: user.id } },
+      relations: ['role'],
+    });
+    if (!userRoles || userRoles.length === 0)
+      throw new ForbiddenException('Insufficient permissions');
 
     // Super admin bypass
     const userRoleNames = userRoles.map((ur) => (ur.role as any).name);
@@ -47,14 +57,17 @@ export class RolesGuard implements CanActivate {
 
     // 1. Check Roles
     if (hasRequiredRoles) {
-      const hasRole = requiredRoles.some((role) => userRoleNames.includes(role));
-      if (!hasRole) throw new ForbiddenException('Insufficient role privileges');
+      const hasRole = requiredRoles.some((role) =>
+        userRoleNames.includes(role),
+      );
+      if (!hasRole)
+        throw new ForbiddenException('Insufficient role privileges');
     }
 
     // 2. Check Permissions
     if (hasRequiredPermissions) {
       const roleIds = userRoles.map((ur) => (ur.role as any).id);
-      
+
       const rpRepo = this.dataSource.getRepository(RolePermission);
       const rolePerms = await rpRepo
         .createQueryBuilder('rp')
@@ -63,10 +76,10 @@ export class RolesGuard implements CanActivate {
         .getMany();
 
       const granted = new Set(rolePerms.map((r) => (r.permission as any).code));
-      
+
       // Check if JWT includes cached permissions (optional optimization)
       if (Array.isArray(user.permissions)) {
-        user.permissions.forEach(p => granted.add(p));
+        user.permissions.forEach((p) => granted.add(p));
       }
 
       const hasAll = requiredPermissions.every((p) => granted.has(p));

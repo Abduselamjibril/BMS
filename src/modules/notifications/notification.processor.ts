@@ -3,7 +3,9 @@ import { PushNotificationService } from './push-notification.service';
 
 @Processor('notification')
 export class NotificationProcessor extends WorkerHost {
-  constructor(private readonly pushNotificationService: PushNotificationService) {
+  constructor(
+    private readonly pushNotificationService: PushNotificationService,
+  ) {
     super();
   }
 

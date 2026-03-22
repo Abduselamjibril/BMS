@@ -1,4 +1,14 @@
-import { Controller, Post, Body, Get, Query, Param, Patch, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Query,
+  Param,
+  Patch,
+  Delete,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { VisitorsService } from './visitors.service';
 import { CreateVisitorDto } from './dto/create-visitor.dto';
@@ -14,38 +24,42 @@ export class VisitorsController {
 
   @Post()
   @ApiOperation({ summary: 'Check-in a visitor (site-scoped)' })
-  async create(@Body() dto: CreateVisitorDto) {
-    return this.visitorsService.create(dto);
+  async create(@Body() dto: CreateVisitorDto, @Req() req: any) {
+    return this.visitorsService.create(dto, req.user);
   }
 
   @Get()
   @Permissions('visitors:read')
   @ApiOperation({ summary: 'List visitors; optional site_id query' })
-  async findAll(@Query('site_id') siteId?: string) {
-    return this.visitorsService.findAll(siteId);
+  async findAll(@Req() req: any, @Query('site_id') siteId?: string) {
+    return this.visitorsService.findAll(req.user, siteId);
   }
 
   @Get(':id')
   @Permissions('visitors:read')
-  async findOne(@Param('id') id: string) {
-    return this.visitorsService.findOne(id);
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    return this.visitorsService.findOne(id, req.user);
   }
 
   @Patch(':id')
   @Permissions('visitors:update')
-  async update(@Param('id') id: string, @Body() dto: UpdateVisitorDto) {
-    return this.visitorsService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateVisitorDto,
+    @Req() req: any,
+  ) {
+    return this.visitorsService.update(id, dto, req.user);
   }
 
   @Patch(':id/checkout')
   @Permissions('visitors:checkout')
-  async checkout(@Param('id') id: string) {
-    return this.visitorsService.checkOut(id);
+  async checkout(@Param('id') id: string, @Req() req: any) {
+    return this.visitorsService.checkOut(id, req.user);
   }
 
   @Delete(':id')
   @Permissions('visitors:delete')
-  async remove(@Param('id') id: string) {
-    return this.visitorsService.remove(id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    return this.visitorsService.remove(id, req.user);
   }
 }

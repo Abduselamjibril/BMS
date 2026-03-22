@@ -11,16 +11,21 @@ export class OverduePenaltyProcessor {
   @Process('apply-penalties')
   async handleOverduePenalty(job: Job<{ date: string }>) {
     console.log(`Processing overdue penalties for date: ${job.data.date}`);
-    const overdueInvoices = await this.financeService.getOverdueInvoices(job.data.date);
-    
+    const overdueInvoices = await this.financeService.getOverdueInvoices(
+      job.data.date,
+    );
+
     for (const invoice of overdueInvoices) {
       try {
         await this.financeService.applyPenalty(invoice);
       } catch (e) {
-        console.error(`Failed to apply penalty for invoice ${invoice.id}:`, e.message);
+        console.error(
+          `Failed to apply penalty for invoice ${invoice.id}:`,
+          e.message,
+        );
       }
     }
-    
+
     return { processed: overdueInvoices.length };
   }
 }

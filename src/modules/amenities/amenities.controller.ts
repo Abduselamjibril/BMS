@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Put, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+} from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { AmenitiesService } from './amenities.service';
@@ -34,13 +42,20 @@ export class AmenitiesController {
 
   @Put(':amenity_id')
   @ApiOperation({ summary: 'Update amenity by id' })
-  @ApiBody({ schema: { properties: {
-    name: { type: 'string', example: 'Swimming Pool' },
-    description: { type: 'string', example: 'Olympic size pool' },
-    category: { type: 'string', example: 'leisure' }
-  } } })
+  @ApiBody({
+    schema: {
+      properties: {
+        name: { type: 'string', example: 'Swimming Pool' },
+        description: { type: 'string', example: 'Olympic size pool' },
+        category: { type: 'string', example: 'leisure' },
+      },
+    },
+  })
   @Permissions('amenities:update')
-  update(@Param('amenity_id') amenityId: string, @Body() dto: Partial<CreateAmenityDto>) {
+  update(
+    @Param('amenity_id') amenityId: string,
+    @Body() dto: Partial<CreateAmenityDto>,
+  ) {
     return this.amenitiesService.update(amenityId, dto);
   }
 
@@ -55,14 +70,20 @@ export class AmenitiesController {
   @Post('/buildings/:building_id/amenities/:amenity_id')
   @ApiOperation({ summary: 'Link amenity to building' })
   @Permissions('amenities:link_building')
-  linkToBuilding(@Param('building_id') buildingId: string, @Param('amenity_id') amenityId: string) {
+  linkToBuilding(
+    @Param('building_id') buildingId: string,
+    @Param('amenity_id') amenityId: string,
+  ) {
     return this.amenitiesService.linkToBuilding(buildingId, amenityId);
   }
 
   @Delete('/buildings/:building_id/amenities/:amenity_id')
   @ApiOperation({ summary: 'Remove amenity from building' })
   @Permissions('amenities:remove_building')
-  unlinkFromBuilding(@Param('building_id') buildingId: string, @Param('amenity_id') amenityId: string) {
+  unlinkFromBuilding(
+    @Param('building_id') buildingId: string,
+    @Param('amenity_id') amenityId: string,
+  ) {
     return this.amenitiesService.unlinkFromBuilding(buildingId, amenityId);
   }
 
@@ -70,14 +91,20 @@ export class AmenitiesController {
   @Post('/units/:unit_id/amenities/:amenity_id')
   @ApiOperation({ summary: 'Link amenity to unit' })
   @Permissions('amenities:link_unit')
-  linkToUnit(@Param('unit_id') unitId: string, @Param('amenity_id') amenityId: string) {
+  linkToUnit(
+    @Param('unit_id') unitId: string,
+    @Param('amenity_id') amenityId: string,
+  ) {
     return this.amenitiesService.linkToUnit(unitId, amenityId);
   }
 
   @Delete('/units/:unit_id/amenities/:amenity_id')
   @ApiOperation({ summary: 'Remove amenity from unit' })
   @Permissions('amenities:remove_unit')
-  unlinkFromUnit(@Param('unit_id') unitId: string, @Param('amenity_id') amenityId: string) {
+  unlinkFromUnit(
+    @Param('unit_id') unitId: string,
+    @Param('amenity_id') amenityId: string,
+  ) {
     return this.amenitiesService.unlinkFromUnit(unitId, amenityId);
   }
 }

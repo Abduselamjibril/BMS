@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { TenantStatus } from '../entities/tenant.entity';
 
 export class RegisterTenantDto {
@@ -37,7 +44,11 @@ export class RegisterTenantDto {
   @IsString()
   vat_reg_number?: string;
 
-  @ApiProperty({ enum: TenantStatus, required: false, default: TenantStatus.ACTIVE })
+  @ApiProperty({
+    enum: TenantStatus,
+    required: false,
+    default: TenantStatus.ACTIVE,
+  })
   @IsOptional()
   @IsEnum(TenantStatus)
   status?: TenantStatus;

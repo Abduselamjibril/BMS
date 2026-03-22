@@ -6,7 +6,11 @@ export class PatchTaxRulesDto {
   @IsNumber()
   vat_rate!: number;
 
-  @ApiProperty({ description: 'Withholding rate', example: 0.02, required: true })
+  @ApiProperty({
+    description: 'Withholding rate',
+    example: 0.02,
+    required: true,
+  })
   @IsNumber()
   withholding_rate!: number;
 }

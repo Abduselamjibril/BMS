@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,48 +13,53 @@ import { MeterReading } from './entities/meter-reading.entity';
 import { CreateMeterDto } from './dto/create-meter.dto';
 import { CreateReadingDto } from './dto/create-reading.dto';
 import { Unit } from '../units/entities/unit.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { Lease, LeaseStatus } from '../leases/entities/lease.entity';
+import { In } from 'typeorm';
 
 @Injectable()
 export class UtilityService {
-
-    /**
-     * Returns units/meters with abnormal consumption (e.g., >2x previous average)
-     */
-    async getUtilityLeaks() {
-      // Find all meters
-      const meters = await this.meterRepo.find();
-      const leaks: Array<{
-        meter_id: string;
-        unit_id: string;
-        latest_reading: number;
-        previous_avg: number;
-        spike_ratio: number;
-      }> = [];
-      for (const meter of meters) {
-        // Get last 4 readings (sorted by date desc)
-        const readings = await this.readingRepo.find({
-          where: { meter_id: meter.id },
-          order: { reading_date: 'DESC' },
-          take: 4,
+  /**
+   * Returns units/meters with abnormal consumption (e.g., >2x previous average)
+   */
+  async getUtilityLeaks() {
+    // Find all meters
+    const meters = await this.meterRepo.find();
+    const leaks: Array<{
+      meter_id: string;
+      unit_id: string;
+      latest_reading: number;
+      previous_avg: number;
+      spike_ratio: number;
+    }> = [];
+    for (const meter of meters) {
+      // Get last 4 readings (sorted by date desc)
+      const readings = await this.readingRepo.find({
+        where: { meter_id: meter.id },
+        order: { reading_date: 'DESC' },
+        take: 4,
+      });
+      if (readings.length < 2) continue;
+      // Calculate average of previous readings (excluding latest)
+      const prev = readings.slice(1);
+      const prevAvg =
+        prev.reduce((sum, r) => sum + Number(r.reading_value), 0) / prev.length;
+      const latest = readings[0];
+      if (prevAvg > 0 && Number(latest.reading_value) > 2 * prevAvg) {
+        // Abnormal spike detected
+        leaks.push({
+          meter_id: meter.id,
+          unit_id: meter.unit_id,
+          latest_reading: Number(latest.reading_value),
+          previous_avg: prevAvg,
+          spike_ratio: Number(latest.reading_value) / prevAvg,
         });
-        if (readings.length < 2) continue;
-        // Calculate average of previous readings (excluding latest)
-        const prev = readings.slice(1);
-        const prevAvg = prev.reduce((sum, r) => sum + Number(r.reading_value), 0) / prev.length;
-        const latest = readings[0];
-        if (prevAvg > 0 && Number(latest.reading_value) > 2 * prevAvg) {
-          // Abnormal spike detected
-          leaks.push({
-            meter_id: meter.id,
-            unit_id: meter.unit_id,
-            latest_reading: Number(latest.reading_value),
-            previous_avg: prevAvg,
-            spike_ratio: Number(latest.reading_value) / prevAvg,
-          });
-        }
       }
-      return leaks;
     }
+    return leaks;
+  }
   constructor(
     @InjectRepository(UtilityMeter)
     private readonly meterRepo: Repository<UtilityMeter>,
@@ -57,28 +67,72 @@ export class UtilityService {
     private readonly readingRepo: Repository<MeterReading>,
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
-    @InjectRepository(require('../leases/entities/lease.entity').Lease)
-    private readonly leaseRepo: Repository<any>,
+    @InjectRepository(Lease)
+    private readonly leaseRepo: Repository<Lease>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+    @InjectRepository(BuildingAdminAssignment)
+    private readonly adminAssignmentRepo: Repository<BuildingAdminAssignment>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  createMeter(dto: CreateMeterDto) {
+  async createMeter(dto: CreateMeterDto, authenticatedUser: any) {
+    const userId = authenticatedUser.id || authenticatedUser.sub;
+    const roles = await this.getUserRoles(userId);
+    if (!roles.includes('super_admin') && !roles.includes('nominee_admin')) {
+      throw new ForbiddenException('Only administrators can create meters.');
+    }
+
     // validate unit_id exists
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!dto.unit_id || !uuidRegex.test(dto.unit_id)) {
       throw new BadRequestException('Invalid unit_id format');
     }
-    return this.unitRepo.findOne({ where: { id: dto.unit_id } }).then((unit) => {
-      if (!unit) throw new NotFoundException('Unit not found');
-      const m = this.meterRepo.create(dto as any);
-      return this.meterRepo.save(m);
-    });
+    return this.unitRepo
+      .findOne({ where: { id: dto.unit_id } })
+      .then((unit) => {
+        if (!unit) throw new NotFoundException('Unit not found');
+        const m = this.meterRepo.create(dto as any);
+        return this.meterRepo.save(m);
+      });
   }
 
-  findMeters(unitId?: string) {
-    const where = unitId ? { where: { unit_id: unitId } } : {};
-    // @ts-ignore
-    return this.meterRepo.find(where);
+  async findMeters(authenticatedUser?: any, unitId?: string) {
+    if (!authenticatedUser) return [];
+
+    const userId = authenticatedUser.id || authenticatedUser.sub;
+    const roles = await this.getUserRoles(userId);
+
+    if (roles.includes('super_admin')) {
+      return this.meterRepo.find(unitId ? { where: { unit_id: unitId } } : {});
+    }
+
+    if (roles.includes('nominee_admin')) {
+      const buildingIds = await this.getUserBuildingIds(userId);
+      return this.meterRepo
+        .createQueryBuilder('meter')
+        .innerJoin(Unit, 'unit', 'unit.id = meter.unit_id')
+        .where('unit.building_id IN (:...buildingIds)', {
+          buildingIds: buildingIds.length ? buildingIds : ['none'],
+        })
+        .andWhere(unitId ? 'meter.unit_id = :unitId' : '1=1', { unitId })
+        .getMany();
+    }
+
+    if (roles.includes('tenant')) {
+      const tenant = await this.tenantRepo.findOne({
+        where: { user: { id: userId } },
+      });
+      const unitIds = await this.getTenantUnitIds(tenant?.id || '');
+      return this.meterRepo.find({
+        where: { unit_id: In(unitIds.length ? unitIds : ['none']) as any },
+      });
+    }
+
+    return [];
   }
 
   async findMeter(id: string) {
@@ -87,10 +141,20 @@ export class UtilityService {
     return m;
   }
 
-  async createReading(dto: CreateReadingDto) {
+  async createReading(dto: CreateReadingDto, authenticatedUser: any) {
+    const userId = authenticatedUser.id || authenticatedUser.sub;
+    const roles = await this.getUserRoles(userId);
+    if (!roles.includes('super_admin') && !roles.includes('nominee_admin')) {
+      throw new ForbiddenException(
+        'Only administrators can record meter readings.',
+      );
+    }
+
     const meter = await this.meterRepo.findOne({ where: { id: dto.meter_id } });
     if (!meter) throw new NotFoundException('Meter not found');
-    const readingDate = dto.reading_date ? new Date(dto.reading_date) : new Date();
+    const readingDate = dto.reading_date
+      ? new Date(dto.reading_date)
+      : new Date();
     const r: MeterReading = this.readingRepo.create({
       meter_id: dto.meter_id,
       reading_value: dto.reading_value,
@@ -107,7 +171,12 @@ export class UtilityService {
         'New Utility Reading',
         `Your ${meter.type} meter reading of ${dto.reading_value} was recorded on ${readingDate.toLocaleDateString()}.`,
         NotificationType.UTILITY,
-        { meterId: meter.id, readingId: savedReading.id, value: dto.reading_value, photo: dto.photo_url }
+        {
+          meterId: meter.id,
+          readingId: savedReading.id,
+          value: dto.reading_value,
+          photo: dto.photo_url,
+        },
       );
     }
     return savedReading;
@@ -116,15 +185,69 @@ export class UtilityService {
   // Helper to get active lease for unit
   private async getActiveLeaseForUnit(unitId: string) {
     return this.leaseRepo.findOne({
-      where: { unit: { id: unitId }, status: 'active' },
+      where: { unit: { id: unitId }, status: LeaseStatus.ACTIVE },
       relations: ['tenant'],
     });
   }
 
-  findReadings(meterId?: string) {
-    const where = meterId ? { where: { meter_id: meterId } } : {};
-    // @ts-ignore
-    return this.readingRepo.find(where);
+  async findReadings(authenticatedUser?: any, meterId?: string) {
+    if (!authenticatedUser) return [];
+
+    const userId = authenticatedUser.id || authenticatedUser.sub;
+    const roles = await this.getUserRoles(userId);
+
+    if (roles.includes('super_admin')) {
+      return this.readingRepo.find(
+        meterId ? { where: { meter_id: meterId } } : {},
+      );
+    }
+
+    if (roles.includes('nominee_admin')) {
+      const buildingIds = await this.getUserBuildingIds(userId);
+      return this.readingRepo
+        .createQueryBuilder('reading')
+        .innerJoin(UtilityMeter, 'meter', 'meter.id = reading.meter_id')
+        .innerJoin(Unit, 'unit', 'unit.id = meter.unit_id')
+        .where('unit.building_id IN (:...buildingIds)', {
+          buildingIds: buildingIds.length ? buildingIds : ['none'],
+        })
+        .andWhere(meterId ? 'reading.meter_id = :meterId' : '1=1', { meterId })
+        .getMany();
+    }
+
+    if (roles.includes('tenant')) {
+      const meters = await this.findMeters(authenticatedUser);
+      const meterIds = meters.map((m) => m.id);
+      return this.readingRepo.find({
+        where: { meter_id: In(meterIds.length ? meterIds : ['none']) as any },
+      });
+    }
+
+    return [];
+  }
+
+  private async getUserRoles(userId: string): Promise<string[]> {
+    const roles = await this.userRoleRepo.find({
+      where: { user: { id: userId } },
+      relations: ['role'],
+    });
+    return roles.map((r) => r.role.name);
+  }
+
+  private async getUserBuildingIds(userId: string): Promise<string[]> {
+    const assignments = await this.adminAssignmentRepo.find({
+      where: { user: { id: userId } },
+      relations: ['building'],
+    });
+    return assignments.map((x) => x.building.id);
+  }
+
+  private async getTenantUnitIds(tenantId: string): Promise<string[]> {
+    const leases = await this.leaseRepo.find({
+      where: { tenant: { id: tenantId }, status: LeaseStatus.ACTIVE },
+      relations: ['unit'],
+    });
+    return leases.map((l) => l.unit.id);
   }
 
   async markAsBilled(readingId: string) {

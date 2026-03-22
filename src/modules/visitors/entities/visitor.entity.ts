@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { Site } from '../../sites/entities/site.entity';
 
 export enum VisitorStatus {
@@ -27,6 +35,18 @@ export class Visitor {
 
   @Column({ length: 100, nullable: true })
   id_card_no?: string;
+
+  @Column({ length: 255, nullable: true })
+  purpose?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  host_user_id?: string;
+
+  @Column({ length: 50, nullable: true })
+  vehicle_number?: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
 
   @Column({ type: 'timestamp', nullable: true })
   check_in_time?: Date;

@@ -1,6 +1,20 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
+} from '@nestjs/common';
 import { AssignRoleDto } from './dto/assign-role.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+} from '@nestjs/swagger';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -47,16 +61,13 @@ export class UsersController {
           name: 'Jane Doe',
           email: 'jane@example.com',
           password: 'NewPassword123!',
-          status: 'active'
-        }
-      }
-    }
+          status: 'active',
+        },
+      },
+    },
   })
   @Permissions('users:update')
-  async update(
-    @Param('id') id: string, 
-    @Body() updateUserDto: UpdateUserDto
-  ) {
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 

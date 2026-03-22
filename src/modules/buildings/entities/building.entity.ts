@@ -1,5 +1,12 @@
 import { Site } from '../../sites/entities/site.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  Index,
+} from 'typeorm';
 import { Owner } from '../../owners/entities/owner.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { BuildingAmenity } from '../../amenities/entities/building-amenity.entity';
@@ -48,7 +55,6 @@ export class Building {
   @Column({ length: 50 })
   subcity!: string;
 
-
   @Column({ length: 200 })
   address!: string;
 
@@ -64,7 +70,11 @@ export class Building {
   @Column('int')
   total_units!: number;
 
-  @Column({ type: 'enum', enum: BuildingStatus, default: BuildingStatus.ACTIVE })
+  @Column({
+    type: 'enum',
+    enum: BuildingStatus,
+    default: BuildingStatus.ACTIVE,
+  })
   status!: BuildingStatus;
 
   @OneToMany(() => Unit, (unit) => unit.building)

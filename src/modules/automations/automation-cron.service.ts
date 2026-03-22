@@ -15,6 +15,28 @@ import { NotificationType } from '../notifications/entities/notification.entity'
 export class AutomationCronService {
   private readonly logger = new Logger(AutomationCronService.name);
 
+  // In-memory set of disabled job names — survives until server restart
+  private readonly disabledJobs = new Set<string>();
+
+  isJobEnabled(jobName: string): boolean {
+    return !this.disabledJobs.has(jobName);
+  }
+
+  enableJob(jobName: string) {
+    this.disabledJobs.delete(jobName);
+    this.logger.log(`Job "${jobName}" enabled`);
+  }
+
+  disableJob(jobName: string) {
+    this.disabledJobs.add(jobName);
+    this.logger.log(`Job "${jobName}" disabled`);
+  }
+
+  getJobStatuses() {
+    const names = ['lease-expiry', 'payment-deadline', 'utility-sync'];
+    return names.map(n => ({ name: n, enabled: this.isJobEnabled(n) }));
+  }
+
   constructor(
     private readonly notificationService: NotificationsService,
     @InjectRepository(Lease)
@@ -34,6 +56,10 @@ export class AutomationCronService {
   // Lease Expiry Alerts
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async leaseExpiryScanner() {
+    if (!this.isJobEnabled('lease-expiry')) {
+      this.logger.log('Lease Expiry Scanner is disabled — skipping');
+      return;
+    }
     this.logger.log('Running Lease Expiry Scanner');
     const today = new Date();
     const daysOffsets = [30, 14, 7];
@@ -55,7 +81,12 @@ export class AutomationCronService {
           'Lease Expiry Reminder',
           `Your lease for unit ${lease.unit.id} is expiring in ${offset} days. Please contact management for renewal.`,
           NotificationType.LEASE,
-          { leaseId: lease.id, unitId: lease.unit.id, buildingId: lease.building.id, daysToExpiry: offset }
+          {
+            leaseId: lease.id,
+            unitId: lease.unit.id,
+            buildingId: lease.building.id,
+            daysToExpiry: offset,
+          },
         );
         // Optionally, notify Manager/Admin (if you have logic to fetch admin for building)
         // Example: const managerId = await this.getBuildingManagerId(lease.building.id);
@@ -67,6 +98,10 @@ export class AutomationCronService {
   // Payment Deadline & Overdue Alerts
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async paymentDeadlineScanner() {
+    if (!this.isJobEnabled('payment-deadline')) {
+      this.logger.log('Payment Deadline Scanner is disabled — skipping');
+      return;
+    }
     this.logger.log('Running Payment Deadline Scanner');
     const today = new Date();
     // 1. Rent Due Soon (5 days away)
@@ -86,7 +121,11 @@ export class AutomationCronService {
         'Upcoming Rent Due',
         `Your rent invoice is due in 5 days. Please ensure timely payment.`,
         NotificationType.FINANCE,
-        { invoiceId: invoice.id, leaseId: invoice.lease.id, dueDate: invoice.due_date }
+        {
+          invoiceId: invoice.id,
+          leaseId: invoice.lease.id,
+          dueDate: invoice.due_date,
+        },
       );
     }
     // 2. Overdue Rent (due_date < today)
@@ -107,7 +146,11 @@ export class AutomationCronService {
         'Late Payment Warning',
         `Your rent invoice is overdue. Please pay immediately to avoid penalties.`,
         NotificationType.FINANCE,
-        { invoiceId: invoice.id, leaseId: invoice.lease.id, dueDate: invoice.due_date }
+        {
+          invoiceId: invoice.id,
+          leaseId: invoice.lease.id,
+          dueDate: invoice.due_date,
+        },
       );
     }
   }
@@ -115,25 +158,51 @@ export class AutomationCronService {
   // Monthly Utility Sync (25th of each month)
   @Cron('0 1 25 * *')
   async monthlyUtilitySync() {
+    if (!this.isJobEnabled('utility-sync')) {
+      this.logger.log('Monthly Utility Sync is disabled — skipping');
+      return;
+    }
     this.logger.log('Running Monthly Utility Sync');
     // Find all unbilled meter readings
     const unbilledReadings = await this.meterReadingRepo.find({
       where: { is_billed: false },
       relations: ['meter'],
     });
+    let notified = 0;
+    let skipped = 0;
     for (const reading of unbilledReadings) {
-      // Find tenant/unit for the meter
-      // This assumes you have a way to link meter to tenant/unit
-      // Example: reading.meter.unit_id or similar
-      // You may need to adjust this logic based on your schema
+      // Resolve meter → unit → active lease → tenant
+      const unitId = reading.meter?.unit_id;
+      if (!unitId) {
+        this.logger.warn(`Skipping reading ${reading.id}: meter has no unit_id`);
+        skipped++;
+        continue;
+      }
+      // Find an active lease for this unit to get the tenant
+      const lease = await this.leaseRepo.findOne({
+        where: { unit: { id: unitId }, status: LeaseStatus.ACTIVE },
+        relations: ['tenant'],
+      });
+      if (!lease?.tenant?.id) {
+        this.logger.warn(`Skipping reading ${reading.id}: no active lease/tenant for unit ${unitId}`);
+        skipped++;
+        continue;
+      }
       await this.notificationService.notify(
-        /* userId */ '',
+        lease.tenant.id,
         'Utility Bill Pending',
-        `A new utility reading has been recorded and will be included in your next bill.`,
+        `A new utility reading has been recorded for your unit and will be included in your next bill.`,
         NotificationType.FINANCE,
-        { meterId: reading.meter_id, readingId: reading.id, readingDate: reading.reading_date }
+        {
+          meterId: reading.meter_id,
+          readingId: reading.id,
+          readingDate: reading.reading_date,
+          unitId,
+        },
       );
+      notified++;
     }
+    this.logger.log(`Utility Sync complete: ${notified} notified, ${skipped} skipped, ${unbilledReadings.length} total readings`);
   }
 
   // Manual triggers for admin override

@@ -7,11 +7,15 @@ export class BuildingAmenity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Building, (building) => building.buildingAmenities, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Building, (building) => building.buildingAmenities, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'building_id' })
   building!: Building;
 
-  @ManyToOne(() => Amenity, (amenity) => amenity.buildingAmenities, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Amenity, (amenity) => amenity.buildingAmenities, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'amenity_id' })
   amenity!: Amenity;
 }

@@ -10,7 +10,10 @@ import { Lease, LeaseStatus } from './entities/lease.entity';
 import { Unit, UnitStatus } from '../units/entities/unit.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Building } from '../buildings/entities/building.entity';
-import { TenantDocument, TenantDocumentType } from '../tenants/entities/tenant-document.entity';
+import {
+  TenantDocument,
+  TenantDocumentType,
+} from '../tenants/entities/tenant-document.entity';
 import {
   OccupancyStatus,
   UnitOccupancyHistory,
@@ -44,32 +47,53 @@ export class LeasesService {
     private readonly userRoleRepository: Repository<UserRole>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
-  ) { }
+  ) {}
 
   private normalizeId(raw?: string): string {
     if (!raw) return raw as unknown as string;
     return raw.replace(/^\s+|\s+$/g, '').replace(/^"|"$/g, '');
   }
-  private isDateOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  private isDateOverlap(
+    aStart: string,
+    aEnd: string,
+    bStart: string,
+    bEnd: string,
+  ): boolean {
     return aStart <= bEnd && bStart <= aEnd;
   }
 
-  private async ensureNoOverlap(unitId: string, startDate: string, endDate: string, excludeLeaseId?: string) {
+  private async ensureNoOverlap(
+    unitId: string,
+    startDate: string,
+    endDate: string,
+    excludeLeaseId?: string,
+  ) {
     const blockingLeases = await this.leaseRepository.find({
       where: {
         unit: { id: unitId },
-        status: In([LeaseStatus.DRAFT, LeaseStatus.ACTIVE, LeaseStatus.RENEWED]),
+        status: In([
+          LeaseStatus.DRAFT,
+          LeaseStatus.ACTIVE,
+          LeaseStatus.RENEWED,
+        ]),
       },
       relations: ['unit'],
     });
 
     const hasOverlap = blockingLeases.some((lease) => {
       if (excludeLeaseId && lease.id === excludeLeaseId) return false;
-      return this.isDateOverlap(startDate, endDate, lease.start_date, lease.end_date);
+      return this.isDateOverlap(
+        startDate,
+        endDate,
+        lease.start_date,
+        lease.end_date,
+      );
     });
 
     if (hasOverlap) {
-      throw new ConflictException('Lease dates overlap with an existing lease for this unit');
+      throw new ConflictException(
+        'Lease dates overlap with an existing lease for this unit',
+      );
     }
   }
 
@@ -81,16 +105,25 @@ export class LeasesService {
 
   async create(dto: CreateLeaseDto): Promise<Lease> {
     if (dto.start_date > dto.end_date) {
-      throw new BadRequestException('start_date must be less than or equal to end_date');
+      throw new BadRequestException(
+        'start_date must be less than or equal to end_date',
+      );
     }
 
-    const tenant = await this.tenantRepository.findOne({ where: { id: dto.tenant_id } });
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: dto.tenant_id },
+    });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const unit = await this.unitRepository.findOne({ where: { id: dto.unit_id }, relations: ['building'] });
+    const unit = await this.unitRepository.findOne({
+      where: { id: dto.unit_id },
+      relations: ['building'],
+    });
     if (!unit) throw new NotFoundException('Unit not found');
 
-    const building = await this.buildingRepository.findOne({ where: { id: dto.building_id } });
+    const building = await this.buildingRepository.findOne({
+      where: { id: dto.building_id },
+    });
     if (!building) throw new NotFoundException('Building not found');
 
     if (unit.building.id !== building.id) {
@@ -98,7 +131,9 @@ export class LeasesService {
     }
 
     if (unit.status !== UnitStatus.VACANT) {
-      throw new BadRequestException('Unit must be vacant to create lease draft');
+      throw new BadRequestException(
+        'Unit must be vacant to create lease draft',
+      );
     }
 
     await this.ensureNoOverlap(unit.id, dto.start_date, dto.end_date);
@@ -120,13 +155,19 @@ export class LeasesService {
     return this.leaseRepository.save(lease);
   }
 
-  async findAll(currentUserId: string, expiringSoon?: boolean, status?: string): Promise<Lease[]> {
+  async findAll(
+    currentUserId: string,
+    expiringSoon?: boolean,
+    status?: string,
+  ): Promise<Lease[]> {
     const userRoles = await this.userRoleRepository.find({
       where: { user: { id: currentUserId } },
       relations: ['role'],
     });
 
     const isNominee = userRoles.some((ur) => ur.role.name === 'nominee_admin');
+    const isTenant = userRoles.some((ur) => ur.role.name === 'tenant');
+    const isSuperAdmin = userRoles.some((ur) => ur.role.name === 'super_admin');
 
     const query = this.leaseRepository
       .createQueryBuilder('lease')
@@ -135,7 +176,12 @@ export class LeasesService {
       .leftJoinAndSelect('lease.building', 'building')
       .orderBy('lease.created_at', 'DESC');
 
-    if (isNominee) {
+    // 1. Super Admin: No filters
+    if (isSuperAdmin) {
+      // no-op
+    }
+    // 2. Nominee Admin: Filter by assigned buildings
+    else if (isNominee) {
       const assignments = await this.buildingAssignmentRepository.find({
         where: { user: { id: currentUserId } },
         relations: ['building'],
@@ -143,6 +189,21 @@ export class LeasesService {
       const buildingIds = assignments.map((item) => item.building.id);
       if (buildingIds.length === 0) return [];
       query.andWhere('lease.building_id IN (:...buildingIds)', { buildingIds });
+    }
+    // 3. Tenant: Filter by their own tenant record
+    else if (isTenant) {
+      const tenantRecord = await this.tenantRepository.findOne({
+        where: { user: { id: currentUserId } },
+      });
+      if (!tenantRecord) return [];
+      query.andWhere('lease.tenant_id = :tenantId', {
+        tenantId: tenantRecord.id,
+      });
+    }
+    // 4. Default fallback: If no specific role handling matched, return empty or limit (security)
+    else {
+      // If they are regular admin or similar, maybe they should see everything?
+      // depends on the architecture, but usually 'admin' sees all unless explicitly nominee.
     }
 
     if (expiringSoon) {
@@ -152,11 +213,15 @@ export class LeasesService {
       const start = now.toISOString().split('T')[0];
       const end = plus30.toISOString().split('T')[0];
       query.andWhere('lease.end_date BETWEEN :start AND :end', { start, end });
-      query.andWhere('lease.status = :activeStatus', { activeStatus: LeaseStatus.ACTIVE });
+      query.andWhere('lease.status = :activeStatus', {
+        activeStatus: LeaseStatus.ACTIVE,
+      });
     }
 
     if (status) {
-      query.andWhere('lease.status = :status', { status: status.toUpperCase() });
+      query.andWhere('lease.status = :status', {
+        status: status.toUpperCase(),
+      });
     }
 
     return query.getMany();
@@ -174,9 +239,16 @@ export class LeasesService {
       throw new BadRequestException('Only draft leases can be activated');
     }
 
-    await this.ensureNoOverlap(lease.unit.id, lease.start_date, lease.end_date, lease.id);
+    await this.ensureNoOverlap(
+      lease.unit.id,
+      lease.start_date,
+      lease.end_date,
+      lease.id,
+    );
 
-    const unit = await this.unitRepository.findOne({ where: { id: lease.unit.id } });
+    const unit = await this.unitRepository.findOne({
+      where: { id: lease.unit.id },
+    });
     if (!unit) throw new NotFoundException('Unit not found');
     if (unit.status !== UnitStatus.VACANT) {
       throw new ConflictException('Unit is already occupied or unavailable');
@@ -185,14 +257,20 @@ export class LeasesService {
     const primaryId = await this.tenantDocumentRepository.findOne({
       where: {
         tenant: { id: lease.tenant.id },
-        type: TenantDocumentType.PRIMARY_ID,
+        type: In([
+          TenantDocumentType.PRIMARY_ID,
+          TenantDocumentType.PASSPORT,
+          TenantDocumentType.ID,
+        ]),
         verified: true,
       },
       relations: ['tenant'],
     });
 
     if (!primaryId) {
-      throw new BadRequestException('Tenant primary ID must be verified before activation');
+      throw new BadRequestException(
+        'Tenant must have a verified ID or Passport before activation',
+      );
     }
 
     await this.dataSource.transaction(async (manager) => {
@@ -226,39 +304,51 @@ export class LeasesService {
     if (!lease) throw new NotFoundException('Lease not found');
 
     if (![LeaseStatus.ACTIVE, LeaseStatus.RENEWED].includes(lease.status)) {
-      throw new BadRequestException('Only active/renewed leases can be terminated');
+      throw new BadRequestException(
+        'Only active/renewed leases can be terminated',
+      );
     }
 
-    const terminationDate = dto.termination_date ?? new Date().toISOString().split('T')[0];
+    const terminationDate =
+      dto.termination_date ?? new Date().toISOString().split('T')[0];
 
     await this.dataSource.transaction(async (manager) => {
       lease.status = LeaseStatus.TERMINATED;
       lease.end_date = terminationDate;
       await manager.getRepository(Lease).save(lease);
 
-      const unit = await manager.getRepository(Unit).findOne({ where: { id: lease.unit.id } });
+      const unit = await manager
+        .getRepository(Unit)
+        .findOne({ where: { id: lease.unit.id } });
       if (!unit) throw new NotFoundException('Unit not found');
       unit.status = UnitStatus.VACANT;
       await manager.getRepository(Unit).save(unit);
 
-      const currentOccupancy = await manager.getRepository(UnitOccupancyHistory).findOne({
-        where: {
-          unit: { id: lease.unit.id },
-          tenant: { id: lease.tenant.id },
-          status: OccupancyStatus.CURRENT,
-        },
-        relations: ['unit', 'tenant'],
-        order: { created_at: 'DESC' },
-      });
+      const currentOccupancy = await manager
+        .getRepository(UnitOccupancyHistory)
+        .findOne({
+          where: {
+            unit: { id: lease.unit.id },
+            tenant: { id: lease.tenant.id },
+            status: OccupancyStatus.CURRENT,
+          },
+          relations: ['unit', 'tenant'],
+          order: { created_at: 'DESC' },
+        });
 
       if (currentOccupancy) {
         currentOccupancy.end_date = terminationDate;
         currentOccupancy.status = OccupancyStatus.PREVIOUS;
-        await manager.getRepository(UnitOccupancyHistory).save(currentOccupancy);
+        await manager
+          .getRepository(UnitOccupancyHistory)
+          .save(currentOccupancy);
       }
     });
 
-    return this.leaseRepository.findOne({ where: { id }, relations: ['tenant', 'unit', 'building'] }) as Promise<Lease>;
+    return this.leaseRepository.findOne({
+      where: { id },
+      relations: ['tenant', 'unit', 'building'],
+    }) as Promise<Lease>;
   }
 
   async renew(id: string, dto: RenewLeaseDto): Promise<Lease> {
@@ -269,15 +359,24 @@ export class LeasesService {
     });
     if (!currentLease) throw new NotFoundException('Lease not found');
 
-    if (![LeaseStatus.ACTIVE, LeaseStatus.EXPIRED].includes(currentLease.status)) {
-      throw new BadRequestException('Only active or expired lease can be renewed');
+    if (
+      ![LeaseStatus.ACTIVE, LeaseStatus.EXPIRED].includes(currentLease.status)
+    ) {
+      throw new BadRequestException(
+        'Only active or expired lease can be renewed',
+      );
     }
 
     if (dto.start_date > dto.end_date) {
       throw new BadRequestException('start_date must be <= end_date');
     }
 
-    await this.ensureNoOverlap(currentLease.unit.id, dto.start_date, dto.end_date);
+    await this.ensureNoOverlap(
+      currentLease.unit.id,
+      dto.start_date,
+      dto.end_date,
+      currentLease.id,
+    );
 
     const renewedLease = this.leaseRepository.create({
       lease_number: this.generateLeaseNumber(),
@@ -301,7 +400,9 @@ export class LeasesService {
 
   async uploadLeaseDocument(id: string, docPath: string): Promise<Lease> {
     const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({ where: { id: cleanId } });
+    const lease = await this.leaseRepository.findOne({
+      where: { id: cleanId },
+    });
     if (!lease) throw new NotFoundException('Lease not found');
     lease.doc_path = docPath;
     return this.leaseRepository.save(lease);
@@ -334,7 +435,10 @@ export class LeasesService {
     });
   }
 
-  async runMidnightAutomation(): Promise<{ reminders: number; expired: number }> {
+  async runMidnightAutomation(): Promise<{
+    reminders: number;
+    expired: number;
+  }> {
     const today = new Date();
     const todayDate = today.toISOString().split('T')[0];
 
@@ -348,7 +452,10 @@ export class LeasesService {
 
     for (const lease of activeLeases) {
       const endDate = new Date(`${lease.end_date}T00:00:00`);
-      const diffDays = Math.floor((endDate.getTime() - new Date(`${todayDate}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.floor(
+        (endDate.getTime() - new Date(`${todayDate}T00:00:00`).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
 
       if ([30, 20, 7].includes(diffDays)) {
         reminders += 1;
@@ -358,7 +465,9 @@ export class LeasesService {
         lease.status = LeaseStatus.EXPIRED;
         await this.leaseRepository.save(lease);
 
-        const unit = await this.unitRepository.findOne({ where: { id: lease.unit.id } });
+        const unit = await this.unitRepository.findOne({
+          where: { id: lease.unit.id },
+        });
         if (unit) {
           unit.status = UnitStatus.VACANT;
           await this.unitRepository.save(unit);
@@ -385,5 +494,19 @@ export class LeasesService {
     }
 
     return { reminders, expired };
+  }
+
+  async remove(id: string): Promise<void> {
+    const cleanId = this.normalizeId(id);
+    const lease = await this.leaseRepository.findOne({
+      where: { id: cleanId },
+    });
+    if (!lease) throw new NotFoundException('Lease not found');
+
+    if (lease.status !== LeaseStatus.DRAFT) {
+      throw new BadRequestException('Only draft leases can be deleted');
+    }
+
+    await this.leaseRepository.remove(lease);
   }
 }

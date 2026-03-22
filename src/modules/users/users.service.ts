@@ -1,8 +1,8 @@
-import { 
-  Injectable, 
-  NotFoundException, 
-  ConflictException, 
-  BadRequestException 
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -34,10 +34,10 @@ export class UsersService {
    * CREATE A NEW USER
    */
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existing = await this.userRepository.findOne({ 
-      where: { email: createUserDto.email } 
+    const existing = await this.userRepository.findOne({
+      where: { email: createUserDto.email },
     });
-    
+
     if (existing) {
       throw new ConflictException('Email already in use');
     }
@@ -54,14 +54,16 @@ export class UsersService {
 
     // If role_id is provided, validate role existence and link to UserRole
     if (createUserDto.role_id) {
-      const role = await this.roleRepository.findOne({ where: { id: createUserDto.role_id } });
+      const role = await this.roleRepository.findOne({
+        where: { id: createUserDto.role_id },
+      });
       if (!role) {
         throw new BadRequestException('The provided role_id is invalid');
       }
-      
-      const userRole = this.userRoleRepository.create({ 
-        user: savedUser, 
-        role: role 
+
+      const userRole = this.userRoleRepository.create({
+        user: savedUser,
+        role: role,
       });
       await this.userRoleRepository.save(userRole);
     }
@@ -73,18 +75,22 @@ export class UsersService {
    * ROLE ASSIGNMENT
    */
   async assignRole(dto: AssignRoleDto) {
-    const user = await this.userRepository.findOne({ where: { id: dto.user_id } });
+    const user = await this.userRepository.findOne({
+      where: { id: dto.user_id },
+    });
     if (!user) throw new NotFoundException('User not found');
 
-    const role = await this.roleRepository.findOne({ where: { id: dto.role_id } });
+    const role = await this.roleRepository.findOne({
+      where: { id: dto.role_id },
+    });
     if (!role) throw new NotFoundException('Role not found');
 
     // Check if the user already has this role
-    const existing = await this.userRoleRepository.findOne({ 
-      where: { 
-        user: { id: dto.user_id }, 
-        role: { id: dto.role_id } 
-      } 
+    const existing = await this.userRoleRepository.findOne({
+      where: {
+        user: { id: dto.user_id },
+        role: { id: dto.role_id },
+      },
     });
 
     let roleAssigned = false;
@@ -96,7 +102,9 @@ export class UsersService {
 
     // Always check and create Contractor entity if user has contractor role
     if (role.name === 'contractor') {
-      const contractorExists = await this.contractorRepository.findOne({ where: { id: user.id } });
+      const contractorExists = await this.contractorRepository.findOne({
+        where: { id: user.id },
+      });
       if (!contractorExists) {
         const contractor = this.contractorRepository.create({
           id: user.id,
@@ -104,20 +112,26 @@ export class UsersService {
           phone: '',
           specialization: '',
           rating: 0,
-          status: 'active'
+          status: 'active',
         });
         await this.contractorRepository.save(contractor);
       }
     }
 
-    return { message: roleAssigned ? 'Role assigned successfully to user' : 'User already has this role, contractor entity ensured' };
+    return {
+      message: roleAssigned
+        ? 'Role assigned successfully to user'
+        : 'User already has this role, contractor entity ensured',
+    };
   }
 
   /**
    * RETRIEVAL METHODS
    */
   async findAll(): Promise<User[]> {
-    return this.userRepository.find();
+    return this.userRepository.find({
+      relations: ['userRoles', 'userRoles.role'],
+    });
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -125,7 +139,10 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['userRoles', 'userRoles.role'],
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -147,7 +164,7 @@ export class UsersService {
 
     // Merge other updates into the existing user object
     Object.assign(user, dto);
-    
+
     return this.userRepository.save(user);
   }
 

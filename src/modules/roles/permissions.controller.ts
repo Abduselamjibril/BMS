@@ -1,7 +1,12 @@
 import { Controller, Post, Get, Body, Delete, Param } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { PermissionsService } from './permissions.service';
 import { CreatePermissionDto } from './dto/create-permission.dto';
 

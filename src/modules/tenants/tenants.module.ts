@@ -12,7 +12,9 @@ import { Unit } from '../units/entities/unit.entity';
 import { Building } from '../buildings/entities/building.entity';
 import { Site } from '../sites/entities/site.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
+import { Role } from '../roles/entities/role.entity';
 import { Lease } from '../leases/entities/lease.entity';
+import { LeasesModule } from '../leases/leases.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -28,8 +30,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Building,
       Site,
       UserRole,
+      Role,
       Lease,
     ]),
+    LeasesModule,
     NotificationsModule,
   ],
   controllers: [TenantsController],

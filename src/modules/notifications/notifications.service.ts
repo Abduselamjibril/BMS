@@ -22,7 +22,7 @@ export class NotificationsService {
     title: string,
     message: string,
     type: NotificationType,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ) {
     const notification = this.notificationRepo.create({
       user_id: userId,
@@ -32,12 +32,12 @@ export class NotificationsService {
       metadata: metadata || {},
       is_read: false,
     });
-    
+
     const saved = await this.notificationRepo.save(notification);
-    
+
     // Optionally: Trigger real-time push/socket here
     // this.sendPush({ title, body: message, userId });
-    
+
     return saved;
   }
 
@@ -57,7 +57,7 @@ export class NotificationsService {
   async markAllAsRead(userId: string) {
     const result = await this.notificationRepo.update(
       { user_id: userId, is_read: false },
-      { is_read: true }
+      { is_read: true },
     );
     return { updated: result.affected };
   }
@@ -81,7 +81,12 @@ export class NotificationsService {
    */
 
   async announce(
-    body: { title: string; message: string; type?: string; targetUserIds?: string[] },
+    body: {
+      title: string;
+      message: string;
+      type?: string;
+      targetUserIds?: string[];
+    },
     super_admin_id: string,
   ) {
     // 1. Determine target users (specific list or everyone)
@@ -97,10 +102,12 @@ export class NotificationsService {
         user_id: userId,
         title: body.title,
         message: body.message,
-        type: body.type ? (body.type as NotificationType) : NotificationType.ANNOUNCEMENT,
+        type: body.type
+          ? (body.type as NotificationType)
+          : NotificationType.ANNOUNCEMENT,
         is_read: false,
       });
-      
+
       const saved = await this.notificationRepo.save(notification);
       results.push(saved);
 
@@ -109,13 +116,13 @@ export class NotificationsService {
         title: body.title,
         body: body.message,
         userId: userId,
-        type: body.type || 'ANNOUNCEMENT'
+        type: body.type || 'ANNOUNCEMENT',
       });
     }
 
-    return { 
-      sent_count: results.length, 
-      status: 'Announcements processed successfully' 
+    return {
+      sent_count: results.length,
+      status: 'Announcements processed successfully',
     };
   }
 
@@ -124,22 +131,24 @@ export class NotificationsService {
    */
 
   // Placeholder for FCM (Firebase Cloud Messaging) integration
-  async sendPush(payload: { 
-    title: string; 
-    body: string; 
-    topic?: string; 
-    token?: string; 
-    type?: string; 
-    userId?: string 
+  async sendPush(payload: {
+    title: string;
+    body: string;
+    topic?: string;
+    token?: string;
+    type?: string;
+    userId?: string;
   }) {
     // Logic to bridge with Firebase Admin SDK or other Push Providers
-    console.log(`[Push Service] Sending to User ${payload.userId}: ${payload.title}`);
-    
-    return { 
-      sent: true, 
+    console.log(
+      `[Push Service] Sending to User ${payload.userId}: ${payload.title}`,
+    );
+
+    return {
+      sent: true,
       provider: 'FCM_STUB',
       timestamp: new Date().toISOString(),
-      payload 
+      payload,
     };
   }
 

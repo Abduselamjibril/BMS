@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class LeasePdfService {
@@ -12,31 +13,45 @@ export class LeasePdfService {
     rent_amount: number;
     service_charge: number;
   }): Promise<Buffer> {
-    const template =
-      'This lease confirms {{tenant_name}} occupies unit {{unit_number}} in {{building_name}} from {{start_date}} to {{end_date}} under lease {{lease_number}}.';
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
 
-    const paragraph = template
-      .replace('{{tenant_name}}', data.tenant_name)
-      .replace('{{unit_number}}', data.unit_number)
-      .replace('{{building_name}}', data.building_name)
-      .replace('{{start_date}}', data.start_date)
-      .replace('{{end_date}}', data.end_date)
-      .replace('{{lease_number}}', data.lease_number);
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (err) => reject(err));
 
-    const content = [
-      'Lease Agreement',
-      `Lease Number: ${data.lease_number}`,
-      `Tenant Name: ${data.tenant_name}`,
-      `Building: ${data.building_name}`,
-      `Unit: ${data.unit_number}`,
-      `Start Date: ${data.start_date}`,
-      `End Date: ${data.end_date}`,
-      `Rent Amount: ${data.rent_amount}`,
-      `Service Charge: ${data.service_charge}`,
-      '',
-      paragraph,
-    ].join('\n');
+      // Header
+      doc.fontSize(20).text('Lease Agreement', { align: 'center' });
+      doc.moveDown();
 
-    return Buffer.from(content, 'utf-8');
+      // Details
+      doc.fontSize(12).text(`Lease Number: ${data.lease_number}`);
+      doc.text(`Tenant Name: ${data.tenant_name}`);
+      doc.text(`Building: ${data.building_name}`);
+      doc.text(`Unit: ${data.unit_number}`);
+      doc.text(`Start Date: ${data.start_date}`);
+      doc.text(`End Date: ${data.end_date}`);
+      doc.text(`Rent Amount: ${data.rent_amount} ETB`);
+      doc.text(`Service Charge: ${data.service_charge} ETB`);
+
+      doc.moveDown();
+      doc.fontSize(14).text('Agreement Summary');
+      doc.moveDown(0.5);
+      doc
+        .fontSize(11)
+        .text(
+          `This lease confirms that ${data.tenant_name} occupies unit ${data.unit_number} in ${data.building_name} from ${data.start_date} to ${data.end_date} under lease ${data.lease_number}.`,
+          { align: 'justify' },
+        );
+
+      doc.moveDown(2);
+      doc.text('Signed:', { continued: true });
+      doc.text(' __________________________', { oblique: true });
+      doc.text('Date:', { continued: true });
+      doc.text(' __________________________', { oblique: true });
+
+      doc.end();
+    });
   }
 }

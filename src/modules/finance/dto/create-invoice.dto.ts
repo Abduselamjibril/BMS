@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID, IsDateString, IsNumber, IsEnum, IsString, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsUUID,
+  IsDateString,
+  IsNumber,
+  IsEnum,
+  IsString,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { InvoiceItemType } from '../entities/invoice-item.entity';
 

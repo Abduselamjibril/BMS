@@ -30,7 +30,11 @@ export class LeasePayment {
   @Column('decimal', { precision: 12, scale: 2 })
   amount!: number;
 
-  @Column({ type: 'enum', enum: LeasePaymentStatus, default: LeasePaymentStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: LeasePaymentStatus,
+    default: LeasePaymentStatus.PENDING,
+  })
   status!: LeasePaymentStatus;
 
   @CreateDateColumn()

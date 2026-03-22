@@ -10,6 +10,8 @@ import { Payment } from './entities/payment.entity';
 import { DepositAdvice } from './entities/deposit-advice.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { OrganizationSettings } from '../settings/entities/organization-settings
       Payment,
       DepositAdvice,
       OrganizationSettings,
+      UserRole,
+      Tenant,
     ]),
     NotificationsModule,
     BullModule.registerQueue({

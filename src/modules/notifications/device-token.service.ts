@@ -10,8 +10,14 @@ export class DeviceTokenService {
     private readonly userDeviceTokenRepo: Repository<UserDeviceToken>,
   ) {}
 
-  async registerDevice(user_id: string, fcm_token: string, device_type: string) {
-    let token = await this.userDeviceTokenRepo.findOne({ where: { fcm_token } });
+  async registerDevice(
+    user_id: string,
+    fcm_token: string,
+    device_type: string,
+  ) {
+    let token = await this.userDeviceTokenRepo.findOne({
+      where: { fcm_token },
+    });
     if (!token) {
       token = this.userDeviceTokenRepo.create({
         user_id,
@@ -35,6 +41,6 @@ export class DeviceTokenService {
 
   async getTokensByUser(user_id: string) {
     const tokens = await this.userDeviceTokenRepo.find({ where: { user_id } });
-    return tokens.map(t => t.fcm_token);
+    return tokens.map((t) => t.fcm_token);
   }
 }

@@ -34,7 +34,11 @@ export class UnitOccupancyHistory {
   @Column({ type: 'date', nullable: true })
   end_date?: string;
 
-  @Column({ type: 'enum', enum: OccupancyStatus, default: OccupancyStatus.CURRENT })
+  @Column({
+    type: 'enum',
+    enum: OccupancyStatus,
+    default: OccupancyStatus.CURRENT,
+  })
   status!: OccupancyStatus;
 
   @CreateDateColumn()

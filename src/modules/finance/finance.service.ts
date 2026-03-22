@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +18,9 @@ import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { Lease } from '../leases/entities/lease.entity';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { UserBuilding } from '../users/entities/user-building.entity';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 
@@ -32,13 +39,17 @@ export class FinanceService {
     private readonly depositAdviceRepo: Repository<DepositAdvice>,
     @InjectRepository(OrganizationSettings)
     private readonly settingsRepo: Repository<OrganizationSettings>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
     @InjectQueue('monthly-invoice')
     private readonly monthlyInvoiceQueue: Queue,
     @InjectQueue('overdue-penalty')
     private readonly overduePenaltyQueue: Queue,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
-  ) { }
+  ) {}
 
   /**
    * BANK ACCOUNTS
@@ -54,39 +65,69 @@ export class FinanceService {
   /**
    * INVOICES
    */
-  async getAllInvoices() {
-    return this.invoiceRepo.find({
-      relations: ['tenant', 'unit', 'lease'],
-      order: { due_date: 'DESC' },
-    });
+  async getAllInvoices(authenticatedUser?: any) {
+    return this.getInvoices(undefined, undefined, authenticatedUser);
   }
 
-  async getInvoices(building_id?: string, status?: string) {
-    const qb = this.invoiceRepo.createQueryBuilder('invoice')
+  async getInvoices(
+    building_id?: string,
+    status?: string,
+    authenticatedUser?: any,
+  ) {
+    const qb = this.invoiceRepo
+      .createQueryBuilder('invoice')
       .leftJoinAndSelect('invoice.tenant', 'tenant')
       .leftJoinAndSelect('invoice.unit', 'unit')
-      .leftJoinAndSelect('invoice.lease', 'lease');
+      .leftJoinAndSelect('invoice.lease', 'lease')
+      .leftJoinAndSelect('invoice.payments', 'payments')
+      .leftJoinAndSelect('invoice.items', 'items');
+
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('tenant')) {
+        const tenant = await this.tenantRepo.findOne({
+          where: { user: { id: currentUserId } },
+        });
+        if (!tenant) return [];
+        qb.andWhere('tenant.id = :tid', { tid: tenant.id });
+      } else if (roleNames.includes('nominee_admin')) {
+        const assignments = await this.dataSource
+          .getRepository(UserBuilding)
+          .find({
+            where: { user: { id: currentUserId } },
+            relations: ['building'],
+          });
+        const bids = assignments.map((a) => a.building.id);
+        if (bids.length > 0) {
+          qb.andWhere('unit.building_id IN (:...bids)', { bids });
+        } else {
+          return [];
+        }
+      }
+    }
 
     if (building_id) {
-      qb.andWhere('unit.buildingId = :building_id', { building_id });
+      qb.andWhere('unit.building_id = :building_id', { building_id });
     }
 
     if (status) {
       qb.andWhere('invoice.status = :status', { status });
     }
 
-    const results = await qb.orderBy('invoice.due_date', 'DESC').getMany();
-    if ((building_id || status) && results.length === 0) {
-      throw new NotFoundException('No invoices found for the given filters');
-    }
-    return results;
+    return qb.orderBy('invoice.due_date', 'DESC').getMany();
   }
 
   async createInvoice(dto: CreateInvoiceDto) {
     // Validation: Check Lease, Tenant, Unit existence
     const lease = await this.dataSource.getRepository(Lease).findOne({
       where: { id: dto.lease_id },
-      relations: ['tenant', 'unit']
+      relations: ['tenant', 'unit'],
     });
 
     if (!lease) throw new NotFoundException('Lease not found');
@@ -122,12 +163,14 @@ export class FinanceService {
 
     // Save individual invoice items
     for (const item of dto.items) {
-      await this.invoiceItemRepo.save(this.invoiceItemRepo.create({
-        invoice: savedInvoice,
-        type: item.type,
-        amount: item.amount,
-        description: item.description,
-      }));
+      await this.invoiceItemRepo.save(
+        this.invoiceItemRepo.create({
+          invoice: savedInvoice,
+          type: item.type,
+          amount: item.amount,
+          description: item.description,
+        }),
+      );
     }
 
     return savedInvoice;
@@ -138,7 +181,9 @@ export class FinanceService {
     if (!invoice) throw new NotFoundException('Invoice not found');
 
     if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Cannot void an invoice that is already paid');
+      throw new BadRequestException(
+        'Cannot void an invoice that is already paid',
+      );
     }
 
     invoice.status = InvoiceStatus.CANCELLED;
@@ -150,7 +195,7 @@ export class FinanceService {
    */
   async createPayment(dto: CreatePaymentDto) {
     const invoice = await this.invoiceRepo.findOne({
-      where: { id: dto.invoice_id }
+      where: { id: dto.invoice_id },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
@@ -161,10 +206,13 @@ export class FinanceService {
     return this.paymentRepo.save(payment);
   }
 
-  async verifyPayment(id: string, dto: { verified_by: string; status: 'confirmed' | 'rejected' }) {
+  async verifyPayment(
+    id: string,
+    dto: { verified_by: string; status: 'confirmed' | 'rejected' },
+  ) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
-      relations: ['invoice']
+      relations: ['invoice'],
     });
 
     if (!payment) throw new NotFoundException('Payment record not found');
@@ -185,7 +233,7 @@ export class FinanceService {
           'Payment Confirmed',
           `Your payment for invoice #${invoice.invoice_no} has been verified. Thank you!`,
           NotificationType.FINANCE,
-          { invoiceId: invoice.id, paymentId: payment.id }
+          { invoiceId: invoice.id, paymentId: payment.id },
         );
       }
     }
@@ -197,7 +245,9 @@ export class FinanceService {
    * DEPOSIT ADVICE
    */
   async createDepositAdvice(dto: CreateDepositAdviceDto) {
-    const bankAccount = await this.bankAccountRepo.findOne({ where: { id: dto.bank_account_id } });
+    const bankAccount = await this.bankAccountRepo.findOne({
+      where: { id: dto.bank_account_id },
+    });
     if (!bankAccount) throw new NotFoundException('Bank account not found');
 
     const depositAdvice = this.depositAdviceRepo.create({
@@ -211,7 +261,9 @@ export class FinanceService {
    * AUTOMATION / BULLMQ HELPERS
    */
   async getActiveLeases(site_id?: string, building_id?: string) {
-    const qb = this.dataSource.getRepository(Lease).createQueryBuilder('lease')
+    const qb = this.dataSource
+      .getRepository(Lease)
+      .createQueryBuilder('lease')
       .leftJoinAndSelect('lease.unit', 'unit')
       .where('lease.status = :status', { status: 'active' });
 
@@ -225,10 +277,11 @@ export class FinanceService {
   }
 
   async getOverdueInvoices(date: string) {
-    return this.invoiceRepo.createQueryBuilder('invoice')
+    return this.invoiceRepo
+      .createQueryBuilder('invoice')
       .where('invoice.due_date < :date', { date })
       .andWhere('invoice.status NOT IN (:...statuses)', {
-        statuses: [InvoiceStatus.PAID, InvoiceStatus.CANCELLED]
+        statuses: [InvoiceStatus.PAID, InvoiceStatus.CANCELLED],
       })
       .getMany();
   }
@@ -256,15 +309,18 @@ export class FinanceService {
    * REPORTING
    */
   async getRevenueReport(building_id?: string, month?: string) {
-    const qb = this.paymentRepo.createQueryBuilder('payment')
+    const qb = this.paymentRepo
+      .createQueryBuilder('payment')
       .select('unit.buildingId', 'building_id')
       .addSelect('SUM(payment.amount)', 'total_revenue')
       .innerJoin('payment.invoice', 'invoice')
       .innerJoin('invoice.unit', 'unit')
       .where('payment.status = :status', { status: 'confirmed' });
 
-    if (building_id) qb.andWhere('unit.buildingId = :building_id', { building_id });
-    if (month) qb.andWhere('EXTRACT(MONTH FROM payment.created_at) = :month', { month });
+    if (building_id)
+      qb.andWhere('unit.buildingId = :building_id', { building_id });
+    if (month)
+      qb.andWhere('EXTRACT(MONTH FROM payment.created_at) = :month', { month });
 
     qb.groupBy('unit.buildingId');
     return qb.getRawMany();
@@ -286,13 +342,17 @@ export class FinanceService {
     return this.settingsRepo.save(settings);
   }
 
-  async generateInvoicesTrigger(data: { site_id?: string; building_id?: string }) {
+  async generateInvoicesTrigger(data: {
+    site_id?: string;
+    building_id?: string;
+  }) {
     await this.monthlyInvoiceQueue.add('generate-invoices', data);
     return { status: 'queued', job: 'monthly-invoice' };
   }
 
   async getTaxReport(month?: string) {
-    const qb = this.invoiceRepo.createQueryBuilder('invoice')
+    const qb = this.invoiceRepo
+      .createQueryBuilder('invoice')
       .select('SUM(invoice.tax_amount)', 'total_vat')
       .addSelect('SUM(invoice.total_amount * 0.02)', 'total_withholding')
       .where('invoice.status = :status', { status: InvoiceStatus.PAID });

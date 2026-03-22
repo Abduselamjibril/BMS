@@ -10,7 +10,16 @@ import { Site } from '../sites/entities/site.entity';
 import { Owner } from '../owners/entities/owner.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Building, BuildingAdminAssignment, Unit, User, Site, Owner])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Building,
+      BuildingAdminAssignment,
+      Unit,
+      User,
+      Site,
+      Owner,
+    ]),
+  ],
   controllers: [BuildingsController],
   providers: [BuildingsService],
 })

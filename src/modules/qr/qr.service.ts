@@ -20,7 +20,8 @@ export class QrService {
   ) {}
 
   private generateToken(len = 12): string {
-    const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const alphabet =
+      '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const bytes = randomBytes(len);
     let token = '';
     for (let i = 0; i < bytes.length; i++) {
@@ -29,7 +30,10 @@ export class QrService {
     return token;
   }
 
-  async createForUnit(unitId: string, opts?: { type?: QRCodeType; expiresAt?: Date }) {
+  async createForUnit(
+    unitId: string,
+    opts?: { type?: QRCodeType; expiresAt?: Date },
+  ) {
     const token = this.generateToken(12);
     const qr = this.qrRepo.create({
       unit_id: unitId,
@@ -43,7 +47,11 @@ export class QrService {
 
   async generateQrPngBuffer(token: string, urlBase = 'https://app.com/q') {
     const qr = await this.qrRepo.findOne({ where: { token } });
-    if (!qr || qr.status !== QRCodeStatus.ACTIVE || (qr.expires_at && qr.expires_at < new Date())) {
+    if (
+      !qr ||
+      qr.status !== QRCodeStatus.ACTIVE ||
+      (qr.expires_at && qr.expires_at < new Date())
+    ) {
       throw new NotFoundException('QR token not found or inactive/expired');
     }
 
@@ -59,13 +67,19 @@ export class QrService {
       const base64 = dataUrl.split(',')[1];
       return Buffer.from(base64, 'base64');
     } catch (err) {
-      throw new Error('QR generation requires the `qrcode` package. Install with `npm i qrcode`');
+      throw new Error(
+        'QR generation requires the `qrcode` package. Install with `npm i qrcode`',
+      );
     }
   }
 
   async recordScan(token: string, deviceType?: string, ip?: string) {
     const qr = await this.qrRepo.findOne({ where: { token } });
-    if (!qr || qr.status !== QRCodeStatus.ACTIVE || (qr.expires_at && qr.expires_at < new Date())) {
+    if (
+      !qr ||
+      qr.status !== QRCodeStatus.ACTIVE ||
+      (qr.expires_at && qr.expires_at < new Date())
+    ) {
       throw new NotFoundException('QR token not found or inactive/expired');
     }
 
@@ -73,23 +87,42 @@ export class QrService {
     await this.qrRepo.save(qr);
 
     // sanitize device and ip to avoid DB column issues
-    const safeDevice = deviceType ? String(deviceType).slice(0, 1000) : undefined;
+    const safeDevice = deviceType
+      ? String(deviceType).slice(0, 1000)
+      : undefined;
     const safeIp = ip ? String(ip).slice(0, 45) : undefined;
-    const log = this.logRepo.create({ qr_id: qr.id, scanned_at: new Date(), device_type: safeDevice, ip_address: safeIp });
+    const log = this.logRepo.create({
+      qr_id: qr.id,
+      scanned_at: new Date(),
+      device_type: safeDevice,
+      ip_address: safeIp,
+    });
     await this.logRepo.save(log);
     // optionally include unit details if unitRepo is available
     let unitDetails: any = null;
     try {
       if (this.unitRepo) {
-        const unit = await this.unitRepo.findOne({ where: { id: qr.unit_id }, relations: ['building', 'unitAmenities', 'unitAmenities.amenity'] as any });
+        const unit = await this.unitRepo.findOne({
+          where: { id: qr.unit_id },
+          relations: [
+            'building',
+            'unitAmenities',
+            'unitAmenities.amenity',
+          ] as any,
+        });
         if (unit) {
           unitDetails = {
             id: unit.id,
             unit_number: unit.unit_number,
             type: unit.type,
             size_sqm: unit.size_sqm,
-            building: unit.building ? { id: unit.building.id, name: unit.building.name } : null,
-            amenities: (unit.unitAmenities || []).map((ua: any) => ({ id: ua.amenity.id, name: ua.amenity.name })),
+            building: unit.building
+              ? { id: unit.building.id, name: unit.building.name }
+              : null,
+            amenities: (unit.unitAmenities || []).map((ua: any) => ({
+              id: ua.amenity.id,
+              name: ua.amenity.name,
+            })),
           };
         }
       }
@@ -101,7 +134,8 @@ export class QrService {
   }
 
   async analytics(limit = 50) {
-    const qrs = await this.qrRepo.createQueryBuilder('q')
+    const qrs = await this.qrRepo
+      .createQueryBuilder('q')
       .orderBy('q.scan_count', 'DESC')
       .limit(limit)
       .getMany();
@@ -111,7 +145,10 @@ export class QrService {
         let unit: any = null;
         try {
           if (this.unitRepo) {
-            unit = await this.unitRepo.findOne({ where: { id: qr.unit_id }, relations: ['building'] as any });
+            unit = await this.unitRepo.findOne({
+              where: { id: qr.unit_id },
+              relations: ['building'] as any,
+            });
           }
         } catch (e) {
           unit = null;
@@ -140,9 +177,17 @@ export class QrService {
 
   async exportPdf(options?: { ids?: string[]; urlBase?: string }) {
     const { ids, urlBase = 'https://app.com/q' } = options || {};
-    const qrs = ids && ids.length
-      ? await this.qrRepo.findByIds(ids)
-      : await this.qrRepo.find({ where: {}, order: { created_at: 'ASC' } });
+    const qrs =
+      ids && ids.length
+        ? await this.qrRepo.find({ 
+            where: { id: require('typeorm').In(ids) },
+            relations: ['unit'] as any
+          })
+        : await this.qrRepo.find({ 
+            where: {}, 
+            order: { created_at: 'ASC' },
+            relations: ['unit'] as any
+          });
 
     if (!qrs.length) return Buffer.from('');
 
@@ -150,15 +195,20 @@ export class QrService {
     const qrcode = await import('qrcode');
     let PDFDocument: any;
     try {
-      PDFDocument = (await import('pdfkit')).default || (await import('pdfkit'));
+      PDFDocument =
+        (await import('pdfkit')).default || (await import('pdfkit'));
     } catch (err) {
-      throw new Error('PDF generation requires `pdfkit`. Install with `npm i pdfkit`');
+      throw new Error(
+        'PDF generation requires `pdfkit`. Install with `npm i pdfkit`',
+      );
     }
 
     const doc = new PDFDocument({ autoFirstPage: false });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
-    const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
+    const done = new Promise<Buffer>((resolve) =>
+      doc.on('end', () => resolve(Buffer.concat(chunks))),
+    );
 
     // layout: 2 columns per row, each QR with caption
     const pageSize = { width: 595.28, height: 841.89 }; // A4 in points
@@ -176,10 +226,18 @@ export class QrService {
       const png = await (qrcode as any).toBuffer(url);
 
       // draw image
-      doc.image(png, x + (colWidth - imgSize) / 2, y, { width: imgSize, height: imgSize });
+      doc.image(png, x + (colWidth - imgSize) / 2, y, {
+        width: imgSize,
+        height: imgSize,
+      });
       // caption
-      doc.fontSize(10).text(`Unit: ${qr.unit_id}`, x + 10, y + imgSize + 8, { width: colWidth - 20 });
-      doc.fontSize(9).text(`Token: ${qr.token}`, x + 10, y + imgSize + 22, { width: colWidth - 20 });
+      const unitLabel = (qr as any).unit?.unit_number || qr.unit_id?.slice(0, 8) || 'Unknown';
+      doc.fontSize(10).text(`Unit: ${unitLabel}`, x + 10, y + imgSize + 8, {
+        width: colWidth - 20,
+      });
+      doc.fontSize(9).text(`Token: ${qr.token}`, x + 10, y + imgSize + 22, {
+        width: colWidth - 20,
+      });
 
       // move to next column/row
       if (x + colWidth * 2 <= pageSize.width - margin) {

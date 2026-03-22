@@ -1,5 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+} from 'typeorm';
 import { MaintenanceRequest } from './maintenance-request.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('contractors')
 export class Contractor {
@@ -20,6 +27,12 @@ export class Contractor {
 
   @Column({ length: 20, default: 'active' })
   status!: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  user?: User;
+
+  @CreateDateColumn()
+  created_at!: Date;
 }
 
 @Entity('work_orders')
@@ -56,4 +69,7 @@ export class WorkOrder {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   proofUrl?: string;
+
+  @CreateDateColumn()
+  created_at!: Date;
 }

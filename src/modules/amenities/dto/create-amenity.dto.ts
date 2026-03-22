@@ -7,7 +7,11 @@ export class CreateAmenityDto {
   @IsNotEmpty()
   name!: string;
 
-  @ApiProperty({ description: 'Amenity description', required: false, example: 'Olympic size pool' })
+  @ApiProperty({
+    description: 'Amenity description',
+    required: false,
+    example: 'Olympic size pool',
+  })
   @IsString()
   description?: string;
 

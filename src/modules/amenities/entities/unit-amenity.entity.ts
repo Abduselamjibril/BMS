@@ -11,7 +11,9 @@ export class UnitAmenity {
   @JoinColumn({ name: 'unit_id' })
   unit!: Unit;
 
-  @ManyToOne(() => Amenity, (amenity) => amenity.unitAmenities, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Amenity, (amenity) => amenity.unitAmenities, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'amenity_id' })
   amenity!: Amenity;
 }
