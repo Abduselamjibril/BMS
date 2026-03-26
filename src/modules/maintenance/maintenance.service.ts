@@ -79,7 +79,7 @@ export class MaintenanceService {
 
     // Admin or Contractor see all requests (to enable assigning/viewing)
     if (isAdmin || isContractor) {
-      return this.requestRepo.find({ relations: ['tenant', 'unit', 'workOrders', 'workOrders.contractor'] });
+      return this.requestRepo.find({ relations: ['tenant', 'tenant.user', 'unit', 'workOrders', 'workOrders.contractor', 'feedbacks'] });
     }
 
     if (roleNames.includes('nominee_admin')) {
@@ -92,9 +92,11 @@ export class MaintenanceService {
       return this.requestRepo
         .createQueryBuilder('request')
         .leftJoinAndSelect('request.tenant', 'tenant')
+        .leftJoinAndSelect('tenant.user', 'user')
         .leftJoinAndSelect('request.unit', 'unit')
         .leftJoinAndSelect('request.workOrders', 'workOrders')
         .leftJoinAndSelect('workOrders.contractor', 'contractor')
+        .leftJoinAndSelect('request.feedbacks', 'feedbacks')
         .where('unit.building_id IN (:...buildingIds)', { buildingIds })
         .getMany();
     }
@@ -106,7 +108,7 @@ export class MaintenanceService {
       if (!tenant) return [];
       return this.requestRepo.find({
         where: { tenant: { id: tenant.id } },
-        relations: ['tenant', 'unit', 'workOrders', 'workOrders.contractor'],
+        relations: ['tenant', 'tenant.user', 'unit', 'workOrders', 'workOrders.contractor', 'feedbacks'],
       });
     }
 
@@ -196,7 +198,7 @@ export class MaintenanceService {
       // Notify tenant
       if (workOrder.request && workOrder.request.tenant) {
         await this.notificationsService.notify(
-          workOrder.request.tenant.id,
+          workOrder.request.tenant.user.id,
           'Maintenance Started',
           'A technician has started working on your maintenance request.',
           NotificationType.MAINTENANCE,
@@ -208,7 +210,7 @@ export class MaintenanceService {
       // Notify tenant
       if (workOrder.request && workOrder.request.tenant) {
         await this.notificationsService.notify(
-          workOrder.request.tenant.id,
+          workOrder.request.tenant.user.id,
           'Maintenance Completed',
           'Your maintenance request has been completed. Please review and rate the service.',
           NotificationType.MAINTENANCE,

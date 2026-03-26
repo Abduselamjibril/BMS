@@ -9,6 +9,7 @@ import {
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { WorkOrder } from './contractor-and-workorder.entity';
+import { MaintenanceFeedback } from './maintenance-feedback.entity';
 
 export enum MaintenanceStatus {
   SUBMITTED = 'SUBMITTED',
@@ -49,6 +50,9 @@ export class MaintenanceRequest {
 
   @OneToMany(() => WorkOrder, (workOrder) => workOrder.request)
   workOrders!: WorkOrder[];
+
+  @OneToMany(() => MaintenanceFeedback, (feedback) => feedback.request)
+  feedbacks!: MaintenanceFeedback[];
 
   @CreateDateColumn()
   created_at!: Date;

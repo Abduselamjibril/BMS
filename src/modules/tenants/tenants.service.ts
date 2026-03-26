@@ -503,9 +503,9 @@ export class TenantsService {
       // Find all tenants in the building via active leases
       const leases = await this.leaseRepository.find({
         where: { building: { id: dto.building_id }, status: 'active' },
-        relations: ['tenant'],
+        relations: ['tenant', 'tenant.user'],
       });
-      userIds = leases.map((l) => l.tenant.id);
+      userIds = leases.map((l) => l.tenant.user.id);
     } else if (dto.target === AnnouncementTarget.SITE && dto.site_id) {
       // Find all tenants in the site via active leases
       const buildings = await this.buildingRepository.find({
@@ -514,13 +514,13 @@ export class TenantsService {
       const buildingIds = buildings.map((b) => b.id);
       const leases = await this.leaseRepository.find({
         where: { building: { id: In(buildingIds) }, status: 'active' },
-        relations: ['tenant'],
+        relations: ['tenant', 'tenant.user'],
       });
-      userIds = leases.map((l) => l.tenant.id);
+      userIds = leases.map((l) => l.tenant.user.id);
     } else if (dto.target === AnnouncementTarget.ALL) {
       // All tenants
-      const tenants = await this.tenantRepository.find();
-      userIds = tenants.map((t) => t.id);
+      const tenants = await this.tenantRepository.find({ relations: ['user'] });
+      userIds = tenants.map((t) => t.user.id);
     }
     for (const userId of userIds) {
       await this.notificationsService.notify(
@@ -612,7 +612,20 @@ export class TenantsService {
       read_status: false,
     });
 
-    return this.messageRepository.save(message);
+    const saved = await this.messageRepository.save(message);
+
+    // Trigger notification for the receiver
+    await this.notificationsService.notify(
+      tenant.user.id,
+      'New Direct Message',
+      dto.content.length > 60
+        ? dto.content.substring(0, 57) + '...'
+        : dto.content,
+      NotificationType.SYSTEM,
+      { message_id: saved.id, sender_id: senderUserId },
+    );
+
+    return saved;
   }
 
   async getChatHistory(

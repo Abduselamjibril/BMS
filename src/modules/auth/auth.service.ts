@@ -33,14 +33,26 @@ export class AuthService {
   async validateUser(loginDto: LoginDto, ip: string) {
     const user = await this.usersService.findByEmail(loginDto.email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
+    // Check if account is temporarily locked
+    if (user.locked_until && user.locked_until > new Date()) {
+      const msRemaining = user.locked_until.getTime() - Date.now();
+      const minutesRemaining = Math.ceil(msRemaining / 60000);
+      throw new ForbiddenException(
+        `Account temporarily locked. Please try again in ${minutesRemaining} minute(s).`,
+      );
+    }
+
     if (user.status === UserStatus.LOCKED)
       throw new ForbiddenException('Account locked. Contact Super Admin');
+
     const valid = await bcrypt.compare(loginDto.password, user.password_hash);
     // Account locking logic
     if (!valid) {
       user.failed_login_attempts = (user.failed_login_attempts || 0) + 1;
       if (user.failed_login_attempts >= 5) {
-        user.status = UserStatus.LOCKED;
+        // Set temporary lock for 5 minutes
+        user.locked_until = new Date(Date.now() + 5 * 60 * 1000);
+        user.failed_login_attempts = 0; // Reset attempts to avoid immediate re-lock
       }
       await this.usersService.save(user);
       await this.loginHistoryRepo.save({
@@ -51,6 +63,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
     user.failed_login_attempts = 0;
+    user.locked_until = null;
     await this.usersService.save(user);
     await this.loginHistoryRepo.save({ user, ip_address: ip, success: true });
     return user;
