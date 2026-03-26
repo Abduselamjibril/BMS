@@ -63,6 +63,9 @@ export class Unit {
   @Column({ type: 'varchar', length: 255, nullable: true })
   description?: string;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  image_url?: string;
+
   @OneToMany(() => UnitAmenity, (ua) => ua.unit)
   unitAmenities!: UnitAmenity[];
 }

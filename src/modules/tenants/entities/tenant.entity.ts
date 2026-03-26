@@ -16,6 +16,11 @@ export enum TenantStatus {
   BLACKLISTED = 'blacklisted',
 }
 
+export enum TenantType {
+  PERSONAL = 'personal',
+  ORGANIZATIONAL = 'organizational',
+}
+
 @Entity('tenants')
 export class Tenant {
   @PrimaryGeneratedColumn('uuid')
@@ -45,6 +50,21 @@ export class Tenant {
 
   @Column({ type: 'enum', enum: TenantStatus, default: TenantStatus.ACTIVE })
   status!: TenantStatus;
+
+  @Column({ type: 'enum', enum: TenantType, default: TenantType.PERSONAL })
+  tenant_type!: TenantType;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  id_image?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  detailed_address?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  license_image?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  profile_image?: string;
 
   @CreateDateColumn()
   created_at!: Date;

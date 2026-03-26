@@ -22,8 +22,11 @@ export class QRCode {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ length: 50 })
-  unit_id!: string;
+  @Column({ length: 50, nullable: true })
+  unit_id?: string;
+
+  @Column({ length: 50, nullable: true })
+  building_id?: string;
 
   @Index({ unique: true })
   @Column({ length: 32 })

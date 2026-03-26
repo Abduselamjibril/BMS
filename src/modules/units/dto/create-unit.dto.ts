@@ -63,6 +63,11 @@ export class CreateUnitDto {
   @IsOptional()
   description?: string;
 
+  @ApiProperty({ description: 'Unit image URL', required: false })
+  @IsString()
+  @IsOptional()
+  image_url?: string;
+
   @ApiProperty({ description: 'Rent price', required: false, example: 1200 })
   @IsNumber()
   @IsOptional()

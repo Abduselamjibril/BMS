@@ -37,6 +37,16 @@ export class QrController {
     return this.qrService.createForUnit(unitId);
   }
 
+  @Post('qr/generate-building/:buildingId')
+  @Auth()
+  @Permissions('qr:generate')
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Generate a QR token for a building (admin)' })
+  async generateForBuilding(@Param('buildingId') buildingId: string) {
+    return this.qrService.createForBuilding(buildingId);
+  }
+
   @Get('qr/:token/png')
   @ApiOperation({ summary: 'Return PNG buffer for QR code (admin/public)' })
   async png(@Param('token') token: string, @Res() res: Response) {
@@ -52,18 +62,24 @@ export class QrController {
   @Get('public/q/:token')
   @ApiOperation({ summary: 'Public: get unit info by QR token' })
   async publicLookup(@Param('token') token: string, @Req() req: Request) {
-    // record scan and return minimal unit info placeholder
     const ip = req.ip || (req.headers['x-forwarded-for'] as string) || '';
     const device = req.headers['user-agent'];
     const result = await this.qrService.recordScan(token, device, ip);
 
-    // TODO: load unit details from unit repository; for now return token metadata
     return {
       token: result.qr.token,
       unit_id: result.qr.unit_id,
+      building_id: (result.qr as any).building_id,
       scan_count: result.qr.scan_count,
       expires_at: result.qr.expires_at,
+      unit: result.unit,
     };
+  }
+
+  @Get('public/building/:token/units')
+  @ApiOperation({ summary: 'Public: get all units for a building QR token' })
+  async publicBuildingUnits(@Param('token') token: string) {
+    return this.qrService.getBuildingUnitsByToken(token);
   }
 
   @Get('qr/analytics')

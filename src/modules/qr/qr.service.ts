@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { InjectRepository as InjectRepo2 } from '@nestjs/typeorm';
 import { Repository as Repo2 } from 'typeorm';
 import { Unit } from '../units/entities/unit.entity';
+import { Building } from '../buildings/entities/building.entity';
 
 @Injectable()
 export class QrService {
@@ -17,6 +18,8 @@ export class QrService {
     private readonly logRepo: Repository<QRScanLog>,
     @InjectRepository(Unit)
     private readonly unitRepo?: Repository<Unit>,
+    @InjectRepository(Building)
+    private readonly buildingRepo?: Repository<Building>,
   ) {}
 
   private generateToken(len = 12): string {
@@ -43,6 +46,66 @@ export class QrService {
       expires_at: opts?.expiresAt ?? null,
     });
     return this.qrRepo.save(qr);
+  }
+
+  async createForBuilding(
+    buildingId: string,
+    opts?: { type?: QRCodeType; expiresAt?: Date },
+  ) {
+    const token = this.generateToken(12);
+    const qr = this.qrRepo.create({
+      building_id: buildingId,
+      token,
+      status: QRCodeStatus.ACTIVE,
+      type: opts?.type ?? QRCodeType.PUBLIC,
+      expires_at: opts?.expiresAt ?? null,
+    });
+    return this.qrRepo.save(qr);
+  }
+
+  async getBuildingUnitsByToken(token: string) {
+    const qr = await this.qrRepo.findOne({ where: { token } });
+    if (!qr || qr.status !== QRCodeStatus.ACTIVE || (qr.expires_at && qr.expires_at < new Date())) {
+      throw new NotFoundException('QR token not found or inactive/expired');
+    }
+    if (!qr.building_id) {
+      throw new NotFoundException('This QR code is not linked to a building');
+    }
+
+    qr.scan_count = (qr.scan_count || 0) + 1;
+    await this.qrRepo.save(qr);
+
+    let building: any = null;
+    try {
+      if (this.buildingRepo) {
+        building = await this.buildingRepo.findOne({ where: { id: qr.building_id } });
+      }
+    } catch (e) { /* ignore */ }
+
+    let units: any[] = [];
+    try {
+      if (this.unitRepo) {
+        units = await this.unitRepo.find({
+          where: { building_id: qr.building_id } as any,
+        });
+      }
+    } catch (e) { /* ignore */ }
+
+    return {
+      building: building ? { id: building.id, name: building.name, address: building.address, image_url: building.image_url } : null,
+      units: units.map(u => ({
+        id: u.id,
+        unit_number: u.unit_number,
+        floor: u.floor,
+        type: u.type,
+        status: u.status,
+        size_sqm: u.size_sqm,
+        bedrooms: u.bedrooms,
+        bathrooms: u.bathrooms,
+        rent_price: u.rent_price,
+        image_url: u.image_url,
+      })),
+    };
   }
 
   async generateQrPngBuffer(token: string, urlBase = 'https://app.com/q') {

@@ -27,4 +27,9 @@ export class CreateMeterDto {
   @IsOptional()
   @IsNumber()
   initial_reading?: number;
+
+  @ApiProperty({ example: 1.5, required: false })
+  @IsOptional()
+  @IsNumber()
+  unit_price?: number;
 }

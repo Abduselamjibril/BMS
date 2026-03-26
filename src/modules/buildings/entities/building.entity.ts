@@ -61,6 +61,9 @@ export class Building {
   @Column({ type: 'varchar', length: 255, nullable: true })
   description?: string;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  image_url?: string;
+
   @Column('decimal', { precision: 10, scale: 6 })
   latitude!: number;
 

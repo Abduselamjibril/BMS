@@ -7,7 +7,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { TenantStatus } from '../entities/tenant.entity';
+import { TenantStatus, TenantType } from '../entities/tenant.entity';
 
 export class RegisterTenantDto {
   @ApiProperty({ example: 'Abel' })
@@ -52,4 +52,29 @@ export class RegisterTenantDto {
   @IsOptional()
   @IsEnum(TenantStatus)
   status?: TenantStatus;
+
+  @ApiProperty({ enum: TenantType, required: false, default: TenantType.PERSONAL })
+  @IsOptional()
+  @IsEnum(TenantType)
+  tenant_type?: TenantType;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  id_image?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  detailed_address?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  license_image?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  profile_image?: string;
 }

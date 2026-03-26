@@ -29,6 +29,11 @@ export class CreateBuildingDto {
   @IsOptional()
   description?: string;
 
+  @ApiProperty({ description: 'Building image URL', required: false })
+  @IsString()
+  @IsOptional()
+  image_url?: string;
+
   @ApiProperty({
     description: 'Site ID',
     example: 'c27caa13-3083-475f-9aa8-9c1219e7c989',

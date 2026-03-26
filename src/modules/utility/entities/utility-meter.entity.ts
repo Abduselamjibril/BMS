@@ -29,6 +29,9 @@ export class UtilityMeter {
   @Column({ type: 'double precision', nullable: true })
   initial_reading?: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  unit_price?: number;
+
   @CreateDateColumn()
   created_at!: Date;
 }
