@@ -10,7 +10,9 @@ import {
   Delete,
   Param,
   Req,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -22,6 +24,7 @@ import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PatchTaxRulesDto } from './dto/patch-tax-rules.dto';
 import { GenerateInvoicesDto } from './dto/generate-invoices.dto';
+import { CreateExpenseDto } from './dto/create-expense.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -55,6 +58,48 @@ export class FinanceController {
     @Query('status') status?: string,
   ) {
     return this.financeService.getInvoices(building_id, status, req.user);
+  }
+
+  @Get('ledger/tenant/:tenantId')
+  @Permissions('finance:ledger:read')
+  @ApiOperation({ summary: 'Get financial ledger for a tenant' })
+  @ApiResponse({ status: 200, description: 'Tenant ledger array.' })
+  async getTenantLedger(@Param('tenantId') tenantId: string) {
+    return this.financeService.getTenantLedger(tenantId);
+  }
+
+  @Get('my-summary')
+  @ApiOperation({ summary: 'Get summary for the authenticated tenant' })
+  async getMySummary(@Req() req: any) {
+    return this.financeService.getTenantSummary(req.user.id);
+  }
+
+  @Get('ledger/tenant/:tenantId/pdf')
+  @Permissions('finance:ledger:read')
+  @ApiOperation({ summary: 'Download financial ledger (PDF)' })
+  async getTenantLedgerPdf(
+    @Param('tenantId') tenantId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.financeService.getTenantLedgerPdf(tenantId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=ledger-${tenantId}.pdf`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('payments/:id/receipt')
+  @ApiOperation({ summary: 'Download payment receipt (PDF)' })
+  async getPaymentReceiptPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.financeService.getPaymentReceiptPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=receipt-${id}.pdf`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Patch('payments/:id/verify')
@@ -223,7 +268,7 @@ export class FinanceController {
     @Query('building_id') building_id?: string,
     @Query('month') month?: string,
   ) {
-    return this.financeService.getRevenueReport(building_id, month);
+    return this.financeService.getRevenueReport({ building_id, month });
   }
 
   @Get('reports/tax')
@@ -231,6 +276,39 @@ export class FinanceController {
   @ApiOperation({ summary: 'Get tax compliance report' })
   @ApiResponse({ status: 200, description: 'Tax report.' })
   async getTaxReport(@Query('month') month?: string) {
-    return this.financeService.getTaxReport(month);
+    return this.financeService.getTaxReport({ month });
+  }
+
+  @Post('expenses')
+  @Permissions('finance:expenses:create')
+  @ApiOperation({ summary: 'Record an expense' })
+  @ApiResponse({ status: 201, description: 'Expense recorded.' })
+  async createExpense(@Body() dto: CreateExpenseDto) {
+    return this.financeService.createExpense(dto);
+  }
+
+  @Get('expenses')
+  @Permissions('finance:expenses:read')
+  @ApiOperation({ summary: 'List all expenses' })
+  @ApiResponse({ status: 200, description: 'Expenses list.' })
+  async getExpenses(
+    @Query('building_id') building_id?: string,
+    @Query('category') category?: string,
+    @Query('start_date') start_date?: string,
+    @Query('end_date') end_date?: string,
+  ) {
+    return this.financeService.getExpenses({ building_id, category, start_date, end_date });
+  }
+
+  @Get('reports/p-and-l')
+  @Permissions('finance:reports:p-and-l')
+  @ApiOperation({ summary: 'Get Profit & Loss report' })
+  @ApiResponse({ status: 200, description: 'P&L report data.' })
+  async getPandLReport(
+    @Query('building_id') building_id?: string,
+    @Query('year') year?: number,
+    @Query('month') month?: number,
+  ) {
+    return this.financeService.getPandLReport({ building_id, year, month });
   }
 }

@@ -17,10 +17,11 @@ export class RenewLeaseDto {
   @IsDateString()
   end_date!: string;
 
-  @ApiProperty({ example: 55000 })
+  @ApiProperty({ example: 55000, required: false })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  rent_amount!: number;
+  rent_amount?: number;
 
   @ApiProperty({ example: 6000, required: false })
   @IsOptional()

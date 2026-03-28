@@ -4,6 +4,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config'; // <-- 1. Import ConfigModule
 import { AppController } from './app.controller';
@@ -31,6 +33,7 @@ import { AutomationsModule } from './modules/automations/automations.module';
 import { TypeOrmModule as FeatureTypeOrmModule } from '@nestjs/typeorm';
 import { UserRole } from './modules/roles/entities/user-role.entity';
 import { ReportsModule } from './modules/reports/reports.module';
+import { InspectionsModule } from './modules/inspections/inspections.module';
 
 @Module({
   imports: [
@@ -80,8 +83,20 @@ import { ReportsModule } from './modules/reports/reports.module';
     ReportsModule,
     // Automations module (Phase: Scheduled Cron Jobs)
     AutomationsModule,
+    InspectionsModule,
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100, // 100 requests per minute
+    }]),
   ],
   controllers: [AppController],
-  providers: [AppService, RolesGuard],
+  providers: [
+    AppService, 
+    RolesGuard,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

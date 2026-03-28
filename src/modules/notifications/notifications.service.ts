@@ -35,10 +35,19 @@ export class NotificationsService {
 
     const saved = await this.notificationRepo.save(notification);
 
-    // Optionally: Trigger real-time push/socket here
-    // this.sendPush({ title, body: message, userId });
+    // [USER FEEDBACK] Trigger Email for necessary notifications
+    await this.sendEmail(userId, title, message);
 
     return saved;
+  }
+
+  async sendEmail(userId: string, subject: string, body: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user || !user.email) return;
+
+    // Infrastructure: Triggering email logic (Postmark/SendGrid)
+    console.log(`[Email Service] Sending to ${user.email}: ${subject}`);
+    // await this.mailProvider.send({ to: user.email, subject, text: body });
   }
 
   /**

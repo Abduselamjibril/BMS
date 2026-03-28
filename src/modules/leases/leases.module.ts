@@ -13,6 +13,7 @@ import { BuildingAdminAssignment } from '../buildings/entities/building-admin-as
 import { UserRole } from '../roles/entities/user-role.entity';
 import { LeasesScheduler } from './leases.scheduler';
 import { LeasePdfService } from './services/lease-pdf.service';
+import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { LeasePdfService } from './services/lease-pdf.service';
       TenantDocument,
       BuildingAdminAssignment,
       UserRole,
+      OrganizationSettings,
     ]),
   ],
   controllers: [LeasesController],

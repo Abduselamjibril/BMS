@@ -11,9 +11,16 @@ import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { Building } from '../../buildings/entities/building.entity';
 
+export enum DepositStatus {
+  HELD = 'HELD',
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
+  REFUNDED = 'REFUNDED',
+}
+
 export enum BillingCycle {
   MONTHLY = 'MONTHLY',
   QUARTERLY = 'QUARTERLY',
+  BIANNUALLY = 'BIANNUALLY',
   YEARLY = 'YEARLY',
 }
 
@@ -69,6 +76,27 @@ export class Lease {
   @ManyToOne(() => Lease, { nullable: true })
   @JoinColumn({ name: 'previous_lease_id' })
   previous_lease?: Lease;
+
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  deposit_amount!: number;
+
+  @Column({ type: 'enum', enum: DepositStatus, default: DepositStatus.HELD })
+  deposit_status!: DepositStatus;
+
+  @Column('decimal', { precision: 12, scale: 2, nullable: true })
+  deposit_refund_amount?: number;
+
+  @Column({ type: 'date', nullable: true })
+  deposit_refund_date?: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  escalation_pct?: number;
+
+  @Column('decimal', { precision: 12, scale: 2, nullable: true })
+  penalty_amount?: number;
+
+  @Column({ type: 'date', nullable: true })
+  next_billing_date?: string;
 
   @CreateDateColumn()
   created_at!: Date;

@@ -29,8 +29,8 @@ export class MaintenanceRequest {
   @ManyToOne(() => Tenant, { nullable: false })
   tenant!: Tenant;
 
-  @ManyToOne(() => Unit, { nullable: false })
-  unit!: Unit;
+  @ManyToOne(() => Unit, { nullable: true })
+  unit?: Unit;
 
   @Column({ length: 50 })
   category!: string; // e.g. plumbing, electric
@@ -53,6 +53,12 @@ export class MaintenanceRequest {
 
   @OneToMany(() => MaintenanceFeedback, (feedback) => feedback.request)
   feedbacks!: MaintenanceFeedback[];
+
+  @Column({ type: 'timestamp', nullable: true })
+  sla_deadline?: Date;
+
+  @Column({ default: false })
+  is_sla_breached!: boolean;
 
   @CreateDateColumn()
   created_at!: Date;

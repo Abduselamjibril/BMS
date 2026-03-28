@@ -42,6 +42,12 @@ export class CreateLeaseDto {
   @Min(0)
   service_charge?: number;
 
+  @ApiProperty({ example: 100000, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  deposit_amount?: number;
+
   @ApiProperty({ enum: BillingCycle, default: BillingCycle.MONTHLY })
   @IsOptional()
   @IsEnum(BillingCycle)

@@ -39,6 +39,9 @@ export class TenantDocument {
   @Column({ nullable: true, type: 'text' })
   reject_reason?: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  expiry_date?: Date;
+
   @CreateDateColumn()
   created_at!: Date;
 }

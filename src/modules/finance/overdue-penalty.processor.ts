@@ -2,6 +2,7 @@ import { Processor, Process } from '@nestjs/bull';
 import type { Job } from 'bull';
 import { Injectable } from '@nestjs/common';
 import { FinanceService } from './finance.service';
+import { Invoice } from './entities/invoice.entity';
 
 @Processor('overdue-penalty')
 @Injectable()
@@ -17,7 +18,7 @@ export class OverduePenaltyProcessor {
 
     for (const invoice of overdueInvoices) {
       try {
-        await this.financeService.applyPenalty(invoice);
+        await this.financeService.applyPenalty(invoice, job.data.date);
       } catch (e) {
         console.error(
           `Failed to apply penalty for invoice ${invoice.id}:`,

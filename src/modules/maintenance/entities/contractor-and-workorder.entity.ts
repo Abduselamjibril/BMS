@@ -68,7 +68,22 @@ export class WorkOrder {
   status!: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  proofUrl?: string;
+  photo_reported?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  photo_in_progress?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  photo_completed?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  proofUrl?: string; // Keep for backward compatibility or as alias for completed
+
+  @Column({ type: 'timestamp', nullable: true })
+  sla_resolution_deadline?: Date;
+
+  @Column({ default: false })
+  is_resolution_breached!: boolean;
 
   @CreateDateColumn()
   created_at!: Date;

@@ -64,6 +64,12 @@ export class LeasesController {
     return this.leasesService.findAll(req.user.id, expiringSoon, status);
   }
 
+  @Get('leases/expiring-summary')
+  @ApiOperation({ summary: 'Get summary of leases expiring in 30/60/90 days' })
+  async getExpiringSummary() {
+    return this.leasesService.getExpiringSummary();
+  }
+
   @Patch('leases/:id/activate')
   @Permissions('leases:activate')
   @ApiOperation({
@@ -72,6 +78,12 @@ export class LeasesController {
   })
   async activate(@Param('id') id: string) {
     return this.leasesService.activate(id);
+  }
+
+  @Get('leases/:id/payment-schedule')
+  @ApiOperation({ summary: 'Get payment schedule for a specific lease' })
+  async getPaymentSchedule(@Param('id') id: string) {
+    return this.leasesService.getPaymentSchedule(id);
   }
 
   @Patch('leases/:id/terminate')

@@ -1,0 +1,30 @@
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Building } from '../../buildings/entities/building.entity';
+
+@Entity('expenses')
+export class Expense {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  amount: number;
+
+  @Column({ type: 'date' })
+  date: string;
+
+  @Column()
+  category: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ nullable: true })
+  building_id: string;
+
+  @ManyToOne(() => Building, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'building_id' })
+  building: Building;
+
+  @CreateDateColumn()
+  created_at: Date;
+}

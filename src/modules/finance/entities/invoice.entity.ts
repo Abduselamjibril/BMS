@@ -48,6 +48,12 @@ export class Invoice {
   @Column('decimal', { precision: 12, scale: 2 })
   total_amount!: number;
 
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  amount_paid!: number;
+
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  late_fee_amount!: number;
+
   @Column({ type: 'enum', enum: InvoiceStatus, default: InvoiceStatus.PENDING })
   status!: InvoiceStatus;
 

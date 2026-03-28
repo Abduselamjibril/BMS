@@ -17,7 +17,7 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Lease, LeaseStatus } from '../leases/entities/lease.entity';
-import { In } from 'typeorm';
+import { In, DataSource } from 'typeorm';
 
 @Injectable()
 export class UtilityService {
@@ -76,6 +76,7 @@ export class UtilityService {
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
     private readonly notificationsService: NotificationsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createMeter(dto: CreateMeterDto, authenticatedUser: any) {
@@ -178,6 +179,56 @@ export class UtilityService {
           photo: dto.photo_url,
         },
       );
+
+      // Utility Auto-Billing Engine
+      const prevReadings = await this.readingRepo.find({
+        where: { meter_id: dto.meter_id },
+        order: { reading_date: 'DESC' },
+        take: 2,
+      });
+
+      if (prevReadings.length >= 2) {
+        const prev = prevReadings[1];
+        const consumption = Number(savedReading.reading_value) - Number(prev.reading_value);
+        if (consumption > 0 && meter.unit_price) {
+          const amount = consumption * Number(meter.unit_price);
+          try {
+            const invRepo = this.dataSource.getRepository('invoices');
+            const itemRepo = this.dataSource.getRepository('invoice_items');
+            const settingsRepo = this.dataSource.getRepository('organization_settings');
+             
+            const settings = await settingsRepo.findOne({ where: {} }) as any;
+            const vatRate = settings ? Number(settings.vat_rate) : 0.15;
+            const tax_amount = amount * vatRate;
+
+            const invoice = invRepo.create({
+              lease: activeLease,
+              tenant: activeLease.tenant,
+              unit: activeLease.unit,
+              due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              subtotal: amount,
+              tax_amount: tax_amount,
+              total_amount: amount + tax_amount,
+              amount_paid: 0,
+              late_fee_amount: 0,
+              status: 'pending',
+              invoice_no: 'UTL-' + savedReading.id.substring(0, 8).toUpperCase(),
+            });
+            const savedInvoice = await invRepo.save(invoice);
+             
+            await itemRepo.save(
+              itemRepo.create({
+                invoice: savedInvoice,
+                type: 'UTILITY',
+                amount: amount,
+                description: `${meter.type.toUpperCase()} - Consumption: ${consumption} units @ ${meter.unit_price}`
+              })
+            );
+          } catch(err) {
+            console.error('Failed to auto-bill utility:', err);
+          }
+        }
+      }
     }
     return savedReading;
   }
@@ -186,7 +237,7 @@ export class UtilityService {
   private async getActiveLeaseForUnit(unitId: string) {
     return this.leaseRepo.findOne({
       where: { unit: { id: unitId }, status: LeaseStatus.ACTIVE },
-      relations: ['tenant'],
+      relations: ['tenant', 'unit'],
     });
   }
 

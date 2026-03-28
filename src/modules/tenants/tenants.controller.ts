@@ -46,6 +46,12 @@ export class TenantsController {
     return this.tenantsService.findAllTenants(req.user.id);
   }
 
+  @Get('tenants/my-lease')
+  @ApiOperation({ summary: 'Get active lease for the authenticated tenant' })
+  async getMyLease(@Req() req: any) {
+    return this.tenantsService.findMyLease(req.user.id);
+  }
+
   @Post('tenants/register')
   @ApiOperation({ summary: 'Create User + Tenant profile' })
   async register(@Body() dto: RegisterTenantDto) {
@@ -180,10 +186,11 @@ export class TenantsController {
   @ApiQuery({ name: 'site_id', required: false, type: String })
   @ApiQuery({ name: 'building_id', required: false, type: String })
   async getAnnouncements(
+    @Req() req: any,
     @Query('site_id') siteId?: string,
     @Query('building_id') buildingId?: string,
   ) {
-    return this.tenantsService.findAnnouncements(siteId, buildingId);
+    return this.tenantsService.findAnnouncements(siteId, buildingId, req.user);
   }
 
   @Post('messages')

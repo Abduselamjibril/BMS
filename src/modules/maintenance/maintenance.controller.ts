@@ -24,11 +24,15 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import { extname } from 'path';
 import { CreateMaintenanceRequestDto } from './dto/create-maintenance-request.dto';
 import { UpdateMaintenanceRequestDto } from './dto/update-maintenance-request.dto';
 import { CreateContractorDto } from './dto/create-contractor.dto';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
+import { CreateMaintenanceScheduleDto } from './dto/create-maintenance-schedule.dto';
 
 @ApiTags('Maintenance')
 @Controller('maintenance')
@@ -76,10 +80,53 @@ export class MaintenanceController {
   }
 
   @Get('requests')
-  @ApiOperation({ summary: 'Get maintenance requests (scoped)' })
+  @ApiOperation({ summary: 'Get all maintenance requests' })
   @ApiResponse({ status: 200, description: 'Requests list.' })
   async getRequests(@Req() req: any) {
     return this.maintenanceService.getRequests(req.user);
+  }
+
+  // --- Maintenance Schedules ---
+  @Post('schedules')
+  @Permissions('maintenance:schedules:create')
+  @ApiOperation({ summary: 'Create a maintenance schedule' })
+  async createSchedule(@Body() dto: CreateMaintenanceScheduleDto) {
+    return this.maintenanceService.createSchedule(dto);
+  }
+
+  @Get('schedules')
+  @Permissions('maintenance:schedules:read')
+  @ApiOperation({ summary: 'List maintenance schedules' })
+  async getSchedules(@Query('building_id') building_id?: string) {
+    return this.maintenanceService.getSchedules(building_id);
+  }
+
+  @Patch('schedules/:id')
+  @Permissions('maintenance:schedules:update')
+  @ApiOperation({ summary: 'Update a maintenance schedule' })
+  async updateSchedule(@Param('id') id: string, @Body() dto: any) {
+    return this.maintenanceService.updateSchedule(id, dto);
+  }
+
+  @Delete('schedules/:id')
+  @Permissions('maintenance:schedules:delete')
+  @ApiOperation({ summary: 'Delete a maintenance schedule' })
+  async deleteSchedule(@Param('id') id: string) {
+    return this.maintenanceService.deleteSchedule(id);
+  }
+
+  @Post('schedules/run-cron')
+  @Permissions('maintenance:schedules:run_cron')
+  @ApiOperation({ summary: 'Manually run the maintenance cron' })
+  async runCron() {
+    return this.maintenanceService.runMaintenanceCron();
+  }
+
+  @Post('sla/check')
+  @Permissions('maintenance:sla:check')
+  @ApiOperation({ summary: 'Manually trigger SLA breach check' })
+  async checkSla() {
+    return this.maintenanceService.runSlaCheckCron();
   }
 
   @Patch('requests/:id')
@@ -97,18 +144,50 @@ export class MaintenanceController {
   @ApiOperation({
     summary: 'Convert request to work order and assign contractor',
   })
+  @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Work order created.' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        request_id: { type: 'string', format: 'uuid', description: 'ID of the maintenance request' },
+        contractor_id: { type: 'string', format: 'uuid', description: 'ID of the assigned contractor' },
+        scheduled_date: { type: 'string', format: 'date-time', description: 'Scheduled date for the work order' },
+        estimated_cost: { type: 'number', description: 'Estimated cost of the work' },
+        description: { type: 'string', description: 'Description of the work order' },
+        photo_reported: {
+          type: 'string',
+          format: 'binary',
+          description: 'Photo reported by the contractor (file upload)',
+        },
+      },
+      required: ['request_id', 'contractor_id', 'scheduled_date', 'estimated_cost'],
+    },
+  })
   @ApiQuery({
     name: 'assigned_by',
     required: true,
     description: 'User ID of the person assigning the work order (UUID)',
     example: 'f949849a-e94a-4130-8278-2825ac401e5c',
   })
+  @UseInterceptors(
+    FileInterceptor('photo_reported', {
+      storage: diskStorage({
+        destination: './uploads/maintenance',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}-${uuidv4()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+    }),
+  )
   async convertToWorkOrder(
-    @Body() dto: CreateWorkOrderDto,
+    @Body() dto: any, // Use any because of multipart form
     @Query('assigned_by') assigned_by: string,
+    @UploadedFile() photo_reported?: Express.Multer.File,
   ) {
-    return this.maintenanceService.convertToWorkOrder({ ...dto, assigned_by });
+    const photoUrl = photo_reported ? `/public/maintenance/${photo_reported.filename}` : undefined;
+    return this.maintenanceService.convertToWorkOrder({ ...dto, assigned_by, photo_reported: photoUrl });
   }
 
   @Patch('work-orders/:id')
@@ -126,7 +205,7 @@ export class MaintenanceController {
           example: 'completed',
         },
         actual_cost: {
-          type: 'number',
+          type: 'string', // Changed to string for multipart form
           description: 'Actual cost of the work (optional)',
         },
         proof: {
@@ -142,18 +221,29 @@ export class MaintenanceController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('proof'))
+  @UseInterceptors(
+    FileInterceptor('proof', {
+      storage: diskStorage({
+        destination: './uploads/maintenance',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}-${uuidv4()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+    }),
+  )
   async updateWorkOrderStatus(
     @Param('id') id: string,
     @Body('status') status: MaintenanceStatus,
-    @Body('actual_cost') actual_cost?: number,
+    @Body('actual_cost') actual_cost?: string,
     @UploadedFile() proof?: Express.Multer.File,
   ) {
+    const photoUrl = proof ? `/public/maintenance/${proof.filename}` : undefined;
     return this.maintenanceService.updateWorkOrderStatus(
       id,
       status,
-      actual_cost,
-      proof,
+      actual_cost ? Number(actual_cost) : undefined,
+      photoUrl,
     );
   }
 

@@ -45,6 +45,13 @@ export class Announcement {
   @JoinColumn({ name: 'created_by' })
   created_by!: User;
 
+  @Column({ type: 'timestamp', nullable: true })
+  @JoinColumn({ name: 'scheduled_at' })
+  scheduled_at?: Date;
+
+  @Column({ type: 'boolean', default: false })
+  is_emergency?: boolean;
+
   @CreateDateColumn()
   created_at!: Date;
 }

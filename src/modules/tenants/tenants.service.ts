@@ -486,12 +486,14 @@ export class TenantsService {
     }
 
     const announcement = this.announcementRepository.create({
-      title: dto.title,
+      title: dto.is_emergency ? `🚨 EMERGENCY: ${dto.title}` : dto.title,
       message: dto.message,
       target: dto.target,
       building,
       site,
       created_by: creator,
+      scheduled_at: dto.scheduled_at ? new Date(dto.scheduled_at) : new Date(),
+      is_emergency: !!dto.is_emergency,
     });
 
     const savedAnnouncement =
@@ -537,6 +539,7 @@ export class TenantsService {
   async findAnnouncements(
     siteId?: string,
     buildingId?: string,
+    authenticatedUser?: any,
   ): Promise<any[]> {
     const query = this.announcementRepository
       .createQueryBuilder('announcement')
@@ -545,15 +548,55 @@ export class TenantsService {
       .leftJoinAndSelect('announcement.created_by', 'createdBy')
       .orderBy('announcement.created_at', 'DESC');
 
-    if (siteId) {
-      query.andWhere('site.id = :siteId', { siteId });
+    let finalSiteId = siteId;
+    let finalBuildingId = buildingId;
+
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepository.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('tenant')) {
+        const tenant = await this.tenantRepository.findOne({
+          where: { user: { id: currentUserId } },
+          relations: ['user'],
+        });
+        if (tenant) {
+          const activeLease = await this.leaseRepository.findOne({
+            where: { tenant: { id: tenant.id }, status: 'ACTIVE' },
+            relations: ['unit', 'unit.building', 'unit.building.site'],
+          });
+          if (activeLease && activeLease.unit && activeLease.unit.building) {
+            finalBuildingId = activeLease.unit.building.id;
+            finalSiteId = activeLease.unit.building.site?.id;
+          }
+        }
+      }
     }
 
-    if (buildingId) {
-      query.andWhere('building.id = :buildingId', { buildingId });
+    // Filter logic: Show if target is ALL OR matches building OR matches site
+    query.where('announcement.target = :all', { all: AnnouncementTarget.ALL });
+
+    if (finalSiteId) {
+      query.orWhere('announcement.site.id = :sId', { sId: finalSiteId });
+    }
+
+    if (finalBuildingId) {
+      query.orWhere('announcement.building.id = :bId', { bId: finalBuildingId });
+    }
+
+    // Scheduling Filter: Only show published announcements to non-admins
+    const now = new Date();
+    const isAdmin = authenticatedUser?.roles?.some((r: string) => ['super_admin', 'company_admin'].includes(r));
+    if (!isAdmin) {
+      query.andWhere('announcement.scheduled_at <= :now', { now });
     }
 
     const announcements = await query.getMany();
+
 
     return announcements.map((announcement) => ({
       id: announcement.id,
@@ -695,5 +738,21 @@ export class TenantsService {
       read_status: message.read_status,
       sent_at: message.sent_at,
     }));
+  }
+
+  async findMyLease(userId: string) {
+    const tenant = await this.tenantRepository.findOne({
+      where: { user: { id: userId } },
+    });
+    if (!tenant) throw new NotFoundException('Tenant profile not found');
+
+    const lease = await this.leaseRepository.findOne({
+      where: { tenant: { id: tenant.id }, status: 'ACTIVE' },
+      relations: ['unit', 'unit.building', 'unit.building.site'],
+    });
+
+    if (!lease) throw new NotFoundException('No active lease found');
+
+    return lease;
   }
 }

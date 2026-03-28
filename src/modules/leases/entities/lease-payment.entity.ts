@@ -37,6 +37,16 @@ export class LeasePayment {
   })
   status!: LeasePaymentStatus;
 
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  late_fee!: number;
+
+  @Column({ type: 'int', default: 0 })
+  days_overdue!: number;
+
+  get total_due(): number {
+    return Number(this.amount) + Number(this.late_fee);
+  }
+
   @CreateDateColumn()
   created_at!: Date;
 

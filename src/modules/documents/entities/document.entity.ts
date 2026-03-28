@@ -13,6 +13,18 @@ export class Document {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ length: 100, nullable: true })
+  category!: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expiry_date?: Date;
+
+  @Column({ default: false })
+  is_template!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  template_content?: string;
+
   @Column({ length: 200 })
   file_name!: string;
 

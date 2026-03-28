@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { Lease, LeaseStatus } from './entities/lease.entity';
+import { Lease, LeaseStatus, DepositStatus } from './entities/lease.entity';
+import { LeasePayment, LeasePaymentStatus } from './entities/lease-payment.entity';
 import { Unit, UnitStatus } from '../units/entities/unit.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Building } from '../buildings/entities/building.entity';
+import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 import {
   TenantDocument,
   TenantDocumentType,
@@ -45,6 +47,10 @@ export class LeasesService {
     private readonly buildingAssignmentRepository: Repository<BuildingAdminAssignment>,
     @InjectRepository(UserRole)
     private readonly userRoleRepository: Repository<UserRole>,
+    @InjectRepository(OrganizationSettings)
+    private readonly orgSettingsRepository: Repository<OrganizationSettings>,
+    @InjectRepository(LeasePayment)
+    private readonly leasePaymentRepository: Repository<LeasePayment>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
   ) {}
@@ -149,6 +155,8 @@ export class LeasesService {
       service_charge: dto.service_charge ?? 0,
       billing_cycle: dto.billing_cycle,
       status: LeaseStatus.DRAFT,
+      deposit_amount: dto.deposit_amount ?? 0,
+      deposit_status: DepositStatus.HELD,
       doc_path: dto.doc_path,
     });
 
@@ -275,6 +283,7 @@ export class LeasesService {
 
     await this.dataSource.transaction(async (manager) => {
       lease.status = LeaseStatus.ACTIVE;
+      lease.next_billing_date = lease.start_date;
       await manager.getRepository(Lease).save(lease);
 
       unit.status = UnitStatus.OCCUPIED;
@@ -312,9 +321,37 @@ export class LeasesService {
     const terminationDate =
       dto.termination_date ?? new Date().toISOString().split('T')[0];
 
+    const settings = await this.orgSettingsRepository.find();
+    const penaltyPct = settings[0]?.early_termination_penalty_pct ?? 0;
+
+    const end = new Date(lease.end_date);
+    const term = new Date(terminationDate);
+    const monthsLeft = Math.max(0, (end.getFullYear() - term.getFullYear()) * 12 + (end.getMonth() - term.getMonth()));
+    
+    let penaltyAmount = 0;
+    if (monthsLeft > 0 && penaltyPct > 0) {
+      penaltyAmount = monthsLeft * Number(lease.rent_amount) * (Number(penaltyPct) / 100);
+    }
+
+    let depositRefund: number | undefined = undefined;
+    let newDepositStatus = lease.deposit_status;
+    
+    if (dto.deposit_deduction !== undefined || penaltyAmount > 0) {
+      const deduction = Number(dto.deposit_deduction || 0);
+      const refund = Math.max(0, Number(lease.deposit_amount) - deduction - penaltyAmount);
+      depositRefund = refund;
+      newDepositStatus = refund > 0 && refund < Number(lease.deposit_amount) ? DepositStatus.PARTIALLY_REFUNDED : DepositStatus.REFUNDED;
+    }
+
     await this.dataSource.transaction(async (manager) => {
       lease.status = LeaseStatus.TERMINATED;
       lease.end_date = terminationDate;
+      lease.penalty_amount = penaltyAmount;
+      if (depositRefund !== undefined) {
+        lease.deposit_refund_amount = depositRefund;
+        lease.deposit_refund_date = new Date().toISOString().split('T')[0];
+        lease.deposit_status = newDepositStatus;
+      }
       await manager.getRepository(Lease).save(lease);
 
       const unit = await manager
@@ -378,6 +415,16 @@ export class LeasesService {
       currentLease.id,
     );
 
+    let newRent = dto.rent_amount;
+    let escalationApplied = 0;
+
+    if (newRent === undefined) {
+      const settings = await this.orgSettingsRepository.find();
+      const escalationPct = settings[0]?.rent_escalation_pct ?? 0;
+      escalationApplied = Number(escalationPct);
+      newRent = Number(currentLease.rent_amount) * (1 + escalationApplied / 100);
+    }
+
     const renewedLease = this.leaseRepository.create({
       lease_number: this.generateLeaseNumber(),
       tenant: currentLease.tenant,
@@ -385,7 +432,10 @@ export class LeasesService {
       building: currentLease.building,
       start_date: dto.start_date,
       end_date: dto.end_date,
-      rent_amount: dto.rent_amount,
+      rent_amount: newRent,
+      escalation_pct: escalationApplied > 0 ? escalationApplied : undefined,
+      deposit_amount: currentLease.deposit_amount,
+      deposit_status: DepositStatus.HELD,
       service_charge: dto.service_charge ?? currentLease.service_charge,
       billing_cycle: dto.billing_cycle ?? currentLease.billing_cycle,
       status: LeaseStatus.DRAFT,
@@ -435,9 +485,40 @@ export class LeasesService {
     });
   }
 
+  async getExpiringSummary(): Promise<any> {
+    const today = new Date();
+    
+    const leases = await this.leaseRepository.find({
+      where: { status: LeaseStatus.ACTIVE },
+    });
+    
+    let under30 = 0;
+    let under60 = 0;
+    let under90 = 0;
+    
+    leases.forEach((l) => {
+      const end = new Date(`${l.end_date}T00:00:00`);
+      const diffDays = Math.floor((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0 && diffDays <= 30) under30++;
+      else if (diffDays > 30 && diffDays <= 60) under60++;
+      else if (diffDays > 60 && diffDays <= 90) under90++;
+    });
+    
+    return { under30, under60, under90 };
+  }
+
+  async getPaymentSchedule(leaseId: string): Promise<LeasePayment[]> {
+    const cleanId = this.normalizeId(leaseId);
+    return this.leasePaymentRepository.find({
+      where: { lease: { id: cleanId } },
+      order: { due_date: 'ASC' },
+    });
+  }
+
   async runMidnightAutomation(): Promise<{
     reminders: number;
     expired: number;
+    lateFeesApplied: number;
   }> {
     const today = new Date();
     const todayDate = today.toISOString().split('T')[0];
@@ -493,7 +574,33 @@ export class LeasesService {
       }
     }
 
-    return { reminders, expired };
+    const settings = await this.orgSettingsRepository.find();
+    const lateFeePct = settings[0]?.late_fee_percentage ?? 2.0;
+
+    const pendingPayments = await this.leasePaymentRepository.find({
+      where: { status: LeasePaymentStatus.PENDING },
+    });
+
+    let lateFeesApplied = 0;
+    
+    for (const payment of pendingPayments) {
+      if (payment.due_date < todayDate) {
+        const dueDateObj = new Date(`${payment.due_date}T00:00:00`);
+        const daysOverdue = Math.floor(
+          (today.getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24),
+        );
+
+        if (daysOverdue > 0) {
+          payment.days_overdue = daysOverdue;
+          payment.late_fee = Number(payment.amount) * (Number(lateFeePct) / 100) * daysOverdue;
+          payment.status = LeasePaymentStatus.OVERDUE;
+          await this.leasePaymentRepository.save(payment);
+          lateFeesApplied += 1;
+        }
+      }
+    }
+
+    return { reminders, expired, lateFeesApplied };
   }
 
   async remove(id: string): Promise<void> {

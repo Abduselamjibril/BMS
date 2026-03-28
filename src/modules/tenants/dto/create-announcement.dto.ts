@@ -24,4 +24,13 @@ export class CreateAnnouncementDto {
   @IsOptional()
   @IsUUID()
   site_id?: string;
+
+  @ApiProperty({ example: '2026-04-01T10:00:00Z', required: false })
+  @IsOptional()
+  @IsString()
+  scheduled_at?: string;
+
+  @ApiProperty({ example: false, required: false })
+  @IsOptional()
+  is_emergency?: boolean;
 }
