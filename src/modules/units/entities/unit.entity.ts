@@ -48,9 +48,6 @@ export class Unit {
   @Column('decimal', { precision: 12, scale: 2, nullable: true })
   rent_price?: number;
 
-  @Column('decimal', { precision: 12, scale: 2, nullable: true })
-  sale_price?: number;
-
   @Column({ type: 'enum', enum: UnitStatus, default: UnitStatus.VACANT })
   status!: UnitStatus;
 

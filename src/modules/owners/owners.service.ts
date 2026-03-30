@@ -17,7 +17,7 @@ export class OwnersService {
   }
 
   async findAll(): Promise<Owner[]> {
-    return this.ownerRepository.find();
+    return this.ownerRepository.find({ relations: ['buildings'] });
   }
 
   async findOne(id: string): Promise<Owner | null> {

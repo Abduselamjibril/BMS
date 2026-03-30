@@ -87,8 +87,22 @@ export class AmenitiesService {
     return this.amenityRepository.find();
   }
 
-  async findOne(id: string): Promise<Amenity | null> {
-    return this.amenityRepository.findOne({ where: { id } });
+  async findOne(id: string): Promise<any | null> {
+    const amenity = await this.amenityRepository.findOne({
+      where: { id },
+      relations: [
+        'buildingAmenities',
+        'buildingAmenities.building',
+        'unitAmenities',
+        'unitAmenities.unit',
+      ],
+    });
+    if (!amenity) return null;
+    return {
+      ...amenity,
+      linked_buildings: (amenity.buildingAmenities || []).map((ba) => ba.building),
+      linked_units: (amenity.unitAmenities || []).map((ua) => ua.unit),
+    };
   }
 
   async update(

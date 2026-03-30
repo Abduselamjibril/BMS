@@ -73,8 +73,4 @@ export class CreateUnitDto {
   @IsOptional()
   rent_price?: number;
 
-  @ApiProperty({ description: 'Sale price', required: false, example: 150000 })
-  @IsNumber()
-  @IsOptional()
-  sale_price?: number;
 }

@@ -36,6 +36,9 @@ export class Site {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column({ length: 255, nullable: true })
+  image_url?: string;
+
   @OneToMany(() => Building, (building) => building.site)
   buildings!: Building[];
 }

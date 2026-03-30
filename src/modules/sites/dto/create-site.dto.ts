@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class CreateSiteDto {
   @ApiProperty({ example: 'Sample Site', description: 'Name of the site' })
@@ -50,5 +50,11 @@ export class CreateSiteDto {
 
   @ApiProperty({ required: false, example: 'Some extra notes' })
   @IsString()
+  @IsOptional()
   notes?: string;
+
+  @ApiProperty({ required: false, description: 'Optional image cover' })
+  @IsString()
+  @IsOptional()
+  image_url?: string;
 }

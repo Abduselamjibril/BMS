@@ -16,4 +16,9 @@ export class CreateOwnerDto {
   @IsString()
   @IsOptional()
   phone?: string;
+
+  @ApiProperty({ description: 'Profile Image', required: false })
+  @IsString()
+  @IsOptional()
+  profile_image?: string;
 }

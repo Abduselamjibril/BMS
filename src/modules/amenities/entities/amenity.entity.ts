@@ -10,6 +10,9 @@ export class Amenity {
   @Column({ length: 100 })
   name!: string;
 
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
   @Column({ length: 50 })
   category!: string;
 
