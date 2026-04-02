@@ -127,6 +127,12 @@ export class TenantsService {
       status: dto.status ?? TenantStatus.ACTIVE,
     });
 
+    // attach optional documentation fields if present
+    if (dto.id_image) tenant.id_image = dto.id_image;
+    if (dto.detailed_address) tenant.detailed_address = dto.detailed_address;
+    if (dto.license_image) tenant.license_image = dto.license_image;
+    if (dto.profile_image) tenant.profile_image = dto.profile_image;
+
     return this.tenantRepository.save(tenant);
   }
 
@@ -294,6 +300,41 @@ export class TenantsService {
       ? (null as unknown as string)
       : dto.reject_reason;
     return this.documentRepository.save(document);
+  }
+
+  async createTenantDocumentFromTenantImage(
+    tenantId: string,
+    type: string,
+    authenticatedUser?: any,
+  ): Promise<TenantDocument> {
+    const tenant = await this.tenantRepository.findOne({ where: { id: tenantId } });
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    // Map requested document type to tenant image fields
+    let fileUrl: string | undefined;
+    const t = (type || '').toUpperCase();
+    if (['PRIMARY_ID', 'ID', 'PASSPORT'].includes(t)) {
+      fileUrl = tenant.id_image as any;
+    } else if (t === 'CONTRACT') {
+      fileUrl = tenant.license_image as any;
+    } else if (t === 'PROFILE') {
+      fileUrl = tenant.profile_image as any;
+    }
+
+    if (!fileUrl) {
+      throw new BadRequestException('No tenant image available for the requested type');
+    }
+
+    const created = await this.createTenantDocument(
+      { tenant_id: tenantId, type: type as any, file_url: fileUrl },
+      authenticatedUser,
+    );
+
+    // Auto-verify the created document
+    const verified = await this.verifyDocument(created.id, { verified: true });
+    return verified;
   }
 
   async approveApplication(id: string): Promise<TenantApplication> {

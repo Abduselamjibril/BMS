@@ -104,6 +104,21 @@ export class TenantsController {
     return this.tenantsService.verifyDocument(id, dto);
   }
 
+  @Patch('documents/from-tenant/:tenantId/verify')
+  @Permissions('documents:verify')
+  @ApiOperation({ summary: 'Create a tenant document from stored tenant image and verify it' })
+  async createAndVerifyFromTenant(
+    @Param('tenantId') tenantId: string,
+    @Body() body: { type: string },
+    @Req() req: any,
+  ) {
+    return this.tenantsService.createTenantDocumentFromTenantImage(
+      tenantId,
+      body.type,
+      req.user,
+    );
+  }
+
   @Post('documents')
   @ApiOperation({ summary: 'Create tenant document record' })
   @ApiConsumes('multipart/form-data')

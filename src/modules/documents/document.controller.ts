@@ -21,6 +21,8 @@ import { DocumentTemplateService } from './template.service';
 import { diskStorage } from 'multer';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { DocumentService } from './document.service';
+import { TenantDocument } from '../tenants/entities/tenant-document.entity';
+// removed duplicate imports
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import {
@@ -45,6 +47,8 @@ export class DocumentController {
     private readonly leaseRepo: Repository<Lease>,
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(TenantDocument)
+    private readonly tenantDocumentRepo: Repository<TenantDocument>,
     private readonly templateService: DocumentTemplateService,
   ) {}
 
@@ -182,5 +186,30 @@ export class DocumentController {
     });
 
     return this.documentRepo.save(newDoc);
+  }
+
+  @Post(':id/promote-to-tenant/verify')
+  @Permissions('documents:verify')
+  @ApiOperation({ summary: 'Promote an existing document to tenant document and auto-verify' })
+  async promoteToTenantAndVerify(
+    @Param('id') id: string,
+    @Body() body: { tenant_id: string; type: string },
+  ) {
+    const doc = await this.documentRepo.findOne({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+
+    const tenant = await this.tenantRepo.findOne({ where: { id: body.tenant_id } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const fileUrl = doc.storage_path.startsWith('/') ? doc.storage_path : `/${doc.storage_path}`;
+
+    const tenantDoc = this.tenantDocumentRepo.create({
+      tenant,
+      type: body.type as any,
+      file_url: fileUrl,
+      verified: true,
+    });
+
+    return this.tenantDocumentRepo.save(tenantDoc);
   }
 }
