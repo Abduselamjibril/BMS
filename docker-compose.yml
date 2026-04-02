@@ -11,6 +11,8 @@ services:
       - "${PORT}:${PORT}"
     env_file:
       - .env
+    volumes:
+      - ./uploads:/usr/src/app/uploads
     depends_on:
       db:
         condition: service_healthy

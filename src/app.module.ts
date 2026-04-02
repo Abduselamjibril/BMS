@@ -34,12 +34,13 @@ import { TypeOrmModule as FeatureTypeOrmModule } from '@nestjs/typeorm';
 import { UserRole } from './modules/roles/entities/user-role.entity';
 import { ReportsModule } from './modules/reports/reports.module';
 import { InspectionsModule } from './modules/inspections/inspections.module';
+import { AssetsModule } from './modules/assets/assets.module';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'public'),
-      serveRoot: '/static',
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
     }),
     // 2. Add this line BEFORE TypeOrmModule
     ConfigModule.forRoot({
@@ -84,6 +85,7 @@ import { InspectionsModule } from './modules/inspections/inspections.module';
     // Automations module (Phase: Scheduled Cron Jobs)
     AutomationsModule,
     InspectionsModule,
+    AssetsModule,
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 100, // 100 requests per minute

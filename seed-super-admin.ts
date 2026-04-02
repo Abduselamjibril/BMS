@@ -159,6 +159,11 @@ async function bootstrap() {
     { code: 'maintenance:work_orders:update', description: 'Update work order status (contractor)' },
     { code: 'maintenance:feedback:create', description: 'Submit feedback for work orders' },
     { code: 'maintenance:reports:read', description: 'Read maintenance KPIs and contractor performance' },
+    // Assets & Inventory
+    { code: 'assets:create', description: 'Log property assets' },
+    { code: 'assets:read', description: 'Read property assets' },
+    { code: 'assets:update', description: 'Update asset details' },
+    { code: 'assets:delete', description: 'Delete asset from inventory' },
   ];
 
   const permRepo = app.get(getRepositoryToken(require('./src/modules/roles/entities/permission.entity').Permission));
@@ -207,6 +212,7 @@ async function bootstrap() {
         'maintenance:requests:create','maintenance:requests:read','maintenance:requests:update','maintenance:work_orders:create','maintenance:work_orders:update','maintenance:feedback:create','maintenance:reports:read',
         'qr:generate','qr:analytics','qr:deactivate','qr:export_pdf',
         'settings:read','settings:update',
+        'assets:create', 'assets:read', 'assets:update', 'assets:delete',
         // role/permission management (admin-level)
         'roles:read','roles:update','roles:assign_permissions','permissions:read'
       ];

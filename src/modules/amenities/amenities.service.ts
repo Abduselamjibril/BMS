@@ -95,6 +95,7 @@ export class AmenitiesService {
         'buildingAmenities.building',
         'unitAmenities',
         'unitAmenities.unit',
+        'unitAmenities.unit.building',
       ],
     });
     if (!amenity) return null;

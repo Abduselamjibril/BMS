@@ -7,6 +7,8 @@ import {
   Param,
   HttpException,
   HttpStatus,
+  Query,
+  Body,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,10 +18,12 @@ import {
   ApiResponse,
   ApiParam,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FileInterceptor, MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { UploadService } from './upload.service';
 import { Auth } from '../../common/decorators/auth.decorator';
@@ -32,6 +36,7 @@ export class UploadController {
 
   @Post('image')
   @ApiOperation({ summary: 'Upload a single image (JPEG/PNG, max 5MB)' })
+  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'] })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -48,7 +53,14 @@ export class UploadController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/buildings',
+        destination: (req, file, cb) => {
+          const type = (req.query.type as string) || (req.body?.type as string) || 'misc';
+          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+          const folder = validTypes.includes(type) ? type : 'misc';
+          const dir = `./uploads/${folder}`;
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          cb(null, dir);
+        },
         filename: (req, file, cb) => {
           const uniqueName = `${Date.now()}-${uuidv4()}${extname(file.originalname)}`;
           cb(null, uniqueName);
@@ -66,11 +78,14 @@ export class UploadController {
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
-  uploadImage(@UploadedFile() file: Express.Multer.File) {
+  uploadImage(@UploadedFile() file: Express.Multer.File, @Query('type') type?: string, @Body('type') bodyType?: string) {
     if (!file) {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
     }
-    return { path: `/public/buildings/${file.filename}` };
+    const typeStr = type || bodyType || 'misc';
+    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+    const folder = validTypes.includes(typeStr) ? typeStr : 'misc';
+    return { path: `/uploads/${folder}/${file.filename}` };
   }
 
   @Post('document')
@@ -87,11 +102,19 @@ export class UploadController {
       },
     },
   })
+  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'] })
   @ApiResponse({ status: 201, description: 'Document uploaded successfully.' })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/buildings',
+        destination: (req, file, cb) => {
+          const type = (req.query.type as string) || (req.body?.type as string) || 'misc';
+          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+          const folder = validTypes.includes(type) ? type : 'misc';
+          const dir = `./uploads/${folder}`;
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          cb(null, dir);
+        },
         filename: (req, file, cb) => {
           const uniqueName = `${Date.now()}-${uuidv4()}${extname(file.originalname)}`;
           cb(null, uniqueName);
@@ -114,11 +137,14 @@ export class UploadController {
       limits: { fileSize: 10 * 1024 * 1024 },
     }),
   )
-  uploadDocument(@UploadedFile() file: Express.Multer.File) {
+  uploadDocument(@UploadedFile() file: Express.Multer.File, @Query('type') type?: string, @Body('type') bodyType?: string) {
     if (!file) {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
     }
-    return { path: `/public/buildings/${file.filename}` };
+    const typeStr = type || bodyType || 'misc';
+    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+    const folder = validTypes.includes(typeStr) ? typeStr : 'misc';
+    return { path: `/uploads/${folder}/${file.filename}` };
   }
 
   @Delete(':filename')
