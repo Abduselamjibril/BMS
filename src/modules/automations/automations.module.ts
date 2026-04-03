@@ -10,6 +10,8 @@ import { User } from '../users/entities/user.entity';
 import { Invoice } from '../finance/entities/invoice.entity';
 import { UtilityMeter } from '../utility/entities/utility-meter.entity';
 import { MeterReading } from '../utility/entities/meter-reading.entity';
+import { AutomationJob } from './entities/automation-job.entity';
+import { JobLog } from './entities/job-log.entity';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { MeterReading } from '../utility/entities/meter-reading.entity';
       Invoice,
       UtilityMeter,
       MeterReading,
+      AutomationJob,
+      JobLog,
     ]),
   ],
   providers: [AutomationCronService],

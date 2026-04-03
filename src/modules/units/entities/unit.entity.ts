@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { UnitAmenity } from '../../amenities/entities/unit-amenity.entity';
+import { Asset } from '../../assets/entities/asset.entity';
 
 export enum UnitType {
   STUDIO = 'STUDIO',
@@ -65,4 +66,7 @@ export class Unit {
 
   @OneToMany(() => UnitAmenity, (ua) => ua.unit)
   unitAmenities!: UnitAmenity[];
+
+  @OneToMany(() => Asset, (a) => a.unit)
+  assets!: Asset[];
 }

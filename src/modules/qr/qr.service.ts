@@ -8,6 +8,7 @@ import { InjectRepository as InjectRepo2 } from '@nestjs/typeorm';
 import { Repository as Repo2 } from 'typeorm';
 import { Unit } from '../units/entities/unit.entity';
 import { Building } from '../buildings/entities/building.entity';
+import { MoreThan } from 'typeorm';
 
 @Injectable()
 export class QrService {
@@ -87,6 +88,7 @@ export class QrService {
       if (this.unitRepo) {
         units = await this.unitRepo.find({
           where: { building_id: qr.building_id } as any,
+          relations: ['unitAmenities', 'unitAmenities.amenity', 'assets'] as any,
         });
       }
     } catch (e) { /* ignore */ }
@@ -104,6 +106,16 @@ export class QrService {
         bathrooms: u.bathrooms,
         rent_price: u.rent_price,
         image_url: u.image_url,
+        amenities: (u.unitAmenities || []).map((ua: any) => ({
+          id: ua.amenity.id,
+          name: ua.amenity.name,
+        })),
+        assets: (u.assets || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          category: a.category,
+          image_url: a.image_url,
+        })),
       })),
     };
   }
@@ -171,6 +183,7 @@ export class QrService {
             'building',
             'unitAmenities',
             'unitAmenities.amenity',
+            'assets',
           ] as any,
         });
         if (unit) {
@@ -185,6 +198,12 @@ export class QrService {
             amenities: (unit.unitAmenities || []).map((ua: any) => ({
               id: ua.amenity.id,
               name: ua.amenity.name,
+            })),
+            assets: (unit.assets || []).map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              category: a.category,
+              image_url: a.image_url,
             })),
           };
         }
@@ -229,6 +248,62 @@ export class QrService {
     );
 
     return items;
+  }
+
+  async getScanStats() {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const logs = await this.logRepo.find({
+      where: { scanned_at: MoreThan(thirtyDaysAgo) },
+      order: { scanned_at: 'ASC' },
+    });
+
+    // 1. Time Series (30 days)
+    const timeSeries: Record<string, number> = {};
+    for (let i = 0; i < 30; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      timeSeries[key] = 0;
+    }
+
+    // 2. Device Breakdown
+    const devices: Record<string, number> = {};
+
+    // 3. Unique Scans (by IP)
+    const uniqueIps = new Set<string>();
+
+    logs.forEach((log) => {
+      const day = log.scanned_at.toISOString().split('T')[0];
+      if (timeSeries[day] !== undefined) timeSeries[day]++;
+
+      const dev = (log.device_type || 'Unknown').toLowerCase();
+      let type = 'Other';
+      if (dev.includes('mobile') || dev.includes('android') || dev.includes('iphone')) type = 'Mobile';
+      else if (dev.includes('windows') || dev.includes('macintosh') || dev.includes('linux')) type = 'Desktop';
+      else if (dev.includes('tablet') || dev.includes('ipad')) type = 'Tablet';
+      
+      devices[type] = (devices[type] || 0) + 1;
+      if (log.ip_address) uniqueIps.add(log.ip_address);
+    });
+
+    return {
+      timeSeries: Object.entries(timeSeries)
+        .map(([day, count]) => ({ day, count }))
+        .sort((a, b) => a.day.localeCompare(b.day)),
+      devices: Object.entries(devices).map(([label, value]) => ({ label, value })),
+      totalScans: logs.length,
+      uniqueScans: uniqueIps.size,
+    };
+  }
+
+  async getRecentLogs(limit = 100) {
+    return this.logRepo.find({
+      order: { scanned_at: 'DESC' },
+      take: limit,
+      relations: ['qr'],
+    });
   }
 
   async deactivate(id: string) {

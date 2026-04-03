@@ -409,9 +409,18 @@ export class MaintenanceService {
       .groupBy('month')
       .getRawMany();
 
+    const pendingRequestsCount = await this.requestRepo.count({
+      where: [
+        { status: MaintenanceStatus.SUBMITTED },
+        { status: MaintenanceStatus.ASSIGNED },
+        { status: MaintenanceStatus.IN_PROGRESS },
+      ],
+    });
+
     return {
       avgResolutionTime,
       contractorStats,
+      pendingRequestsCount,
       monthlyTrends: monthlyTrends.map(t => ({ month: t.month, total: Number(t.total) })),
     };
   }

@@ -63,6 +63,7 @@ export class ReportsService {
       occupied_leases: occupiedLeases,
       total_revenue: totalRevenue,
       maintenance: maintenanceKpis,
+      pending_maintenance_count: maintenanceKpis.pendingRequestsCount || 0,
     };
   }
 

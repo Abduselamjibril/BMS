@@ -22,15 +22,15 @@ export class SettingsService {
   ): Promise<OrganizationSettings> {
     let settings = await this.settingsRepo.findOne({ where: {} });
     if (logo) {
-      // Save the file to a static directory (e.g., public/logos)
-      const logoDir = join(process.cwd(), 'public', 'logos');
+      // Save the file to a standard directory (e.g., uploads/settings)
+      const logoDir = join(process.cwd(), 'uploads', 'settings');
       const fs = require('fs');
       if (!fs.existsSync(logoDir)) fs.mkdirSync(logoDir, { recursive: true });
       // Replace spaces with dashes in the filename
       const safeName = logo.originalname.replace(/\s+/g, '-');
       const filePath = join(logoDir, safeName);
       writeFileSync(filePath, logo.buffer);
-      dto.logo_path = `/static/logos/${safeName}`;
+      dto.logo_path = `/uploads/settings/${safeName}`;
     }
     if (!settings) {
       settings = this.settingsRepo.create(dto);

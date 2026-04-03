@@ -9,7 +9,7 @@ COPY package*.json ./
 
 # 4. Install ALL dependencies (including NestJS CLI needed for the build)
 # We do NOT use --production here because we need the build tools
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # 5. Copy the rest of the application source code
 COPY . .

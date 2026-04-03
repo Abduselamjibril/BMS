@@ -94,6 +94,27 @@ export class QrController {
     return this.qrService.analytics(l);
   }
 
+  @Get('qr/analytics/stats')
+  @Auth()
+  @Permissions('qr:analytics')
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Admin: Get 30-day time-series and device stats' })
+  async getStats() {
+    return this.qrService.getScanStats();
+  }
+
+  @Get('qr/analytics/logs')
+  @Auth()
+  @Permissions('qr:analytics')
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Admin: Get recent scan audit logs' })
+  async getLogs(@Query('limit') limit?: string) {
+    const l = limit ? parseInt(limit, 10) : 100;
+    return this.qrService.getRecentLogs(l);
+  }
+
   @Patch('qr/:id/deactivate')
   @Auth()
   @Permissions('qr:deactivate')

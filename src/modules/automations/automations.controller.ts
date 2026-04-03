@@ -34,4 +34,10 @@ export class AutomationsController {
     this.automationCronService.disableJob(jobName);
     return { status: 'disabled', job: jobName };
   }
+
+  @Get('logs')
+  @ApiOperation({ summary: 'Get recent automation execution logs' })
+  getLogs() {
+    return this.automationCronService.getExecutionLogs();
+  }
 }
