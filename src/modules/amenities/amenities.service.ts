@@ -83,8 +83,54 @@ export class AmenitiesService {
     return this.amenityRepository.save(amenity);
   }
 
-  async findAll(): Promise<Amenity[]> {
-    return this.amenityRepository.find();
+  async findAll(query?: any): Promise<any[]> {
+    const qb = this.amenityRepository.createQueryBuilder('amenity');
+
+    // Load relations for compatibility with frontend expectations
+    qb.leftJoinAndSelect('amenity.buildingAmenities', 'ba_load')
+      .leftJoinAndSelect('ba_load.building', 'b_load')
+      .leftJoinAndSelect('amenity.unitAmenities', 'ua_load')
+      .leftJoinAndSelect('ua_load.unit', 'u_load')
+      .leftJoinAndSelect('u_load.building', 'ub_load');
+
+    if (query?.buildingId) {
+      qb.andWhere((subQb) => {
+        const subQuery = subQb
+          .subQuery()
+          .select('1')
+          .from(BuildingAmenity, 'ba_filter')
+          .where('ba_filter.amenity_id = amenity.id')
+          .andWhere('ba_filter.building_id = :buildingId', {
+            buildingId: query.buildingId,
+          })
+          .getQuery();
+        return `EXISTS (${subQuery})`;
+      }, { buildingId: query.buildingId });
+    }
+
+    if (query?.unitId) {
+      qb.andWhere((subQb) => {
+        const subQuery = subQb
+          .subQuery()
+          .select('1')
+          .from(UnitAmenity, 'ua_filter')
+          .where('ua_filter.amenity_id = amenity.id')
+          .andWhere('ua_filter.unit_id = :unitId', { unitId: query.unitId })
+          .getQuery();
+        return `EXISTS (${subQuery})`;
+      }, { unitId: query.unitId });
+    }
+
+    qb.orderBy('amenity.name', 'ASC');
+
+    const results = await qb.getMany();
+
+    // Map to include linked_buildings and linked_units just like findOne does
+    return results.map((amenity) => ({
+      ...amenity,
+      linked_buildings: (amenity.buildingAmenities || []).map((ba) => ba.building),
+      linked_units: (amenity.unitAmenities || []).map((ua) => ua.unit),
+    }));
   }
 
   async findOne(id: string): Promise<any | null> {

@@ -16,7 +16,7 @@ export class Site {
   subcity!: string;
 
   @Column({ length: 100 })
-  location_lat_long!: string;
+  location!: string;
 
   @Column({ length: 50, nullable: true })
   code?: string;

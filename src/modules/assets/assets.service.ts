@@ -20,28 +20,40 @@ export class AssetsService {
 
   async create(createAssetDto: CreateAssetDto): Promise<Asset> {
     const { buildingId, unitId, ...assetData } = createAssetDto;
-    const asset = this.assetRepository.create(assetData);
-
-    if (buildingId) {
-      const building = await this.buildingRepository.findOne({
-        where: { id: buildingId },
-      });
-      if (building) asset.building = building;
-    }
-
-    if (unitId) {
-      const unit = await this.unitRepository.findOne({ where: { id: unitId } });
-      if (unit) asset.unit = unit;
-    }
-
+    const asset = this.assetRepository.create({
+      ...assetData,
+      buildingId,
+      unitId,
+    });
     return this.assetRepository.save(asset);
   }
 
-  async findAll(): Promise<Asset[]> {
-    return this.assetRepository.find({
-      relations: ['building', 'unit'],
-      order: { created_at: 'DESC' },
-    });
+  async findAll(filters?: {
+    category?: string;
+    condition?: string;
+    buildingId?: string;
+    unitId?: string;
+  }): Promise<Asset[]> {
+    const qb = this.assetRepository.createQueryBuilder('asset');
+
+    qb.leftJoinAndSelect('asset.building', 'building')
+      .leftJoinAndSelect('asset.unit', 'unit')
+      .orderBy('asset.created_at', 'DESC');
+
+    if (filters?.category) {
+      qb.andWhere('asset.category = :category', { category: filters.category });
+    }
+    if (filters?.condition) {
+      qb.andWhere('asset.condition = :condition', { condition: filters.condition });
+    }
+    if (filters?.buildingId) {
+      qb.andWhere('asset.buildingId = :buildingId', { buildingId: filters.buildingId });
+    }
+    if (filters?.unitId) {
+      qb.andWhere('asset.unitId = :unitId', { unitId: filters.unitId });
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: string): Promise<Asset> {
@@ -59,27 +71,8 @@ export class AssetsService {
 
     Object.assign(asset, assetData);
 
-    if (buildingId !== undefined) {
-      if (buildingId) {
-        const building = await this.buildingRepository.findOne({
-          where: { id: buildingId },
-        });
-        if (building) asset.building = building;
-      } else {
-        asset.building = undefined;
-      }
-    }
-
-    if (unitId !== undefined) {
-      if (unitId) {
-        const unit = await this.unitRepository.findOne({
-          where: { id: unitId },
-        });
-        if (unit) asset.unit = unit;
-      } else {
-        asset.unit = undefined;
-      }
-    }
+    if (buildingId !== undefined) asset.buildingId = buildingId || undefined;
+    if (unitId !== undefined) asset.unitId = unitId || undefined;
 
     return this.assetRepository.save(asset);
   }

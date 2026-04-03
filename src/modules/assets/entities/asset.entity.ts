@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -51,10 +52,16 @@ export class Asset {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  buildingId?: string;
   @ManyToOne(() => Building, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'buildingId' })
   building?: Building;
 
+  @Column({ type: 'uuid', nullable: true })
+  unitId?: string;
   @ManyToOne(() => Unit, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'unitId' })
   unit?: Unit;
 
   @CreateDateColumn()

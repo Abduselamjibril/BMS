@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -29,8 +30,8 @@ export class AmenitiesController {
   @Get()
   @ApiOperation({ summary: 'Get all amenities' })
   @Permissions('amenities:read')
-  findAll() {
-    return this.amenitiesService.findAll();
+  findAll(@Query() query?: any) {
+    return this.amenitiesService.findAll(query);
   }
 
   @Get(':amenity_id')

@@ -21,12 +21,12 @@ export class CreateSiteDto {
   subcity: string;
 
   @ApiProperty({
-    example: '40.7128,-74.0060',
-    description: 'Latitude and longitude of the site',
+    example: 'Addis Ababa',
+    description: 'Location or address of the site',
   })
   @IsString()
   @IsNotEmpty()
-  location_lat_long: string;
+  location: string;
 
   @ApiProperty({ required: false, example: 'SIT-001' })
   @IsString()

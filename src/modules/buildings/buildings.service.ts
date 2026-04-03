@@ -41,24 +41,6 @@ export class BuildingsService {
     });
     if (!owner) throw new NotFoundException('Owner not found');
 
-    let latitude: number | undefined = undefined;
-    let longitude: number | undefined = undefined;
-    if (site.location_lat_long) {
-      const [lat, long] = site.location_lat_long.split(',').map(Number);
-      if (!isNaN(lat) && !isNaN(long)) {
-        latitude = lat;
-        longitude = long;
-      }
-    }
-
-    if (latitude === undefined || longitude === undefined) {
-      throw new BadRequestException(
-        'Site location_lat_long must be a valid "lat,long" value',
-      );
-    }
-
-    // Create building and assign relations, using site data for missing fields
-
     const building = this.buildingRepository.create({
       ...dto,
       site,
@@ -66,9 +48,7 @@ export class BuildingsService {
       country: 'Ethiopia',
       city: site.city,
       subcity: site.subcity,
-      latitude,
-      longitude,
-
+      location: site.location,
       total_units: 0,
     });
     return this.buildingRepository.save(building);

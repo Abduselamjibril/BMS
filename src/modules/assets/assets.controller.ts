@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AssetsService } from './assets.service';
@@ -30,10 +31,10 @@ export class AssetsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all property assets' })
+  @ApiOperation({ summary: 'List all property assets with optional filters' })
   @Permissions('assets:read')
-  findAll() {
-    return this.assetsService.findAll();
+  findAll(@Query() query: any) {
+    return this.assetsService.findAll(query);
   }
 
   @Get(':id')
