@@ -13,6 +13,7 @@ import { MeterReading } from './entities/meter-reading.entity';
 import { CreateMeterDto } from './dto/create-meter.dto';
 import { CreateReadingDto } from './dto/create-reading.dto';
 import { Unit } from '../units/entities/unit.entity';
+import { Building } from '../buildings/entities/building.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
@@ -86,55 +87,87 @@ export class UtilityService {
       throw new ForbiddenException('Only administrators can create meters.');
     }
 
-    // validate unit_id exists
+    // validate unit_id exists and relations
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!dto.unit_id || !uuidRegex.test(dto.unit_id)) {
       throw new BadRequestException('Invalid unit_id format');
     }
-    return this.unitRepo
-      .findOne({ where: { id: dto.unit_id } })
-      .then((unit) => {
-        if (!unit) throw new NotFoundException('Unit not found');
-        const m = this.meterRepo.create(dto as any);
-        return this.meterRepo.save(m);
-      });
+
+    const unit = await this.unitRepo.findOne({ where: { id: dto.unit_id }, relations: ['building', 'building.site'] });
+    if (!unit) throw new NotFoundException('Unit not found');
+
+    // If building_id provided ensure unit belongs to that building
+    if (dto.building_id && String(unit.building.id) !== String(dto.building_id)) {
+      throw new BadRequestException('Provided building_id does not match unit building');
+    }
+
+    // If site_id provided ensure building belongs to that site
+    if (dto.site_id && String(unit.building.site.id) !== String(dto.site_id)) {
+      throw new BadRequestException('Provided site_id does not match unit building site');
+    }
+
+    const m = this.meterRepo.create({
+      ...dto,
+      unit_id: dto.unit_id,
+      building_id: dto.building_id || unit.building.id,
+      site_id: dto.site_id || unit.building.site.id,
+    } as any);
+
+    return this.meterRepo.save(m);
   }
 
-  async findMeters(authenticatedUser?: any, unitId?: string) {
-    if (!authenticatedUser) return [];
+ async findMeters(authenticatedUser?: any, unitId?: string, buildingId?: string, siteId?: string) {
+  if (!authenticatedUser) return [];
 
-    const userId = authenticatedUser.id || authenticatedUser.sub;
-    const roles = await this.getUserRoles(userId);
+  const userId = authenticatedUser.id || authenticatedUser.sub;
+  const roles = await this.getUserRoles(userId);
 
+  try {
+    // Start with a clean query builder on the meter table
+    const qb = this.meterRepo.createQueryBuilder('meter');
+
+    // 1. Apply Permission Logic (Restrict view based on Role)
     if (roles.includes('super_admin')) {
-      return this.meterRepo.find(unitId ? { where: { unit_id: unitId } } : {});
-    }
-
-    if (roles.includes('nominee_admin')) {
+      // Super admin can see everything, no initial 'WHERE' needed
+    } else if (roles.includes('nominee_admin')) {
       const buildingIds = await this.getUserBuildingIds(userId);
-      return this.meterRepo
-        .createQueryBuilder('meter')
-        .innerJoin(Unit, 'unit', 'unit.id = meter.unit_id')
-        .where('unit.building_id IN (:...buildingIds)', {
-          buildingIds: buildingIds.length ? buildingIds : ['none'],
-        })
-        .andWhere(unitId ? 'meter.unit_id = :unitId' : '1=1', { unitId })
-        .getMany();
-    }
-
-    if (roles.includes('tenant')) {
-      const tenant = await this.tenantRepo.findOne({
-        where: { user: { id: userId } },
+      // Restrict to buildings the admin is assigned to
+      qb.andWhere('meter.building_id::text IN (:...buildingIds)', {
+        buildingIds: buildingIds.length ? buildingIds : ['none'],
       });
+    } else if (roles.includes('tenant')) {
+      const tenant = await this.tenantRepo.findOne({ where: { user: { id: userId } } });
       const unitIds = await this.getTenantUnitIds(tenant?.id || '');
-      return this.meterRepo.find({
-        where: { unit_id: In(unitIds.length ? unitIds : ['none']) as any },
+      // Restrict to units the tenant has active leases for
+      qb.andWhere('meter.unit_id::text IN (:...unitIds)', {
+        unitIds: unitIds.length ? unitIds : ['none'],
       });
+    } else {
+      return []; // Other roles see nothing
     }
 
-    return [];
+    // 2. Apply Optional Query Filters (Filters from the API request)
+    // We filter directly on 'meter' columns because they are already populated
+    if (unitId) {
+      qb.andWhere('meter.unit_id::text = :unitId', { unitId });
+    }
+    if (buildingId) {
+      qb.andWhere('meter.building_id::text = :buildingId', { buildingId });
+    }
+    if (siteId) {
+      qb.andWhere('meter.site_id::text = :siteId', { siteId });
+    }
+
+    // Log the generated SQL to the console for debugging if needed
+    // console.debug('Generated SQL:', qb.getSql());
+
+    return await qb.getMany();
+  } catch (err) {
+    console.error('UtilityService.findMeters error', err);
+    throw err;
   }
+}
 
   async findMeter(id: string) {
     const m = await this.meterRepo.findOne({ where: { id } });

@@ -8,12 +8,15 @@ import {
   UseInterceptors,
   UploadedFile,
   Req,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 
 import { UtilityService } from './utility.service';
 import { CreateMeterDto } from './dto/create-meter.dto';
@@ -44,11 +47,45 @@ export class UtilityController {
     return this.utilityService.createMeter(dto, req.user);
   }
 
+  @ApiQuery({ name: 'unit_id', required: false, type: String, description: 'Filter by unit UUID' })
+  @ApiQuery({ name: 'building_id', required: false, type: String, description: 'Filter by building UUID' })
+  @ApiQuery({ name: 'site_id', required: false, type: String, description: 'Filter by site UUID' })
   @Get('meters')
   @Permissions('utilities:meters:read')
   @ApiOperation({ summary: 'List meters; optional unit_id query' })
-  async findMeters(@Req() req: any, @Query('unit_id') unitId?: string) {
-    return this.utilityService.findMeters(req.user, unitId);
+  async findMeters(
+    @Req() req: any,
+    @Query('unit_id') unitId?: string,
+    @Query('building_id') buildingId?: string,
+    @Query('site_id') siteId?: string,
+  ) {
+    // Basic validation for incoming UUID query params
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (unitId && !uuidRegex.test(unitId)) throw new BadRequestException('Invalid unit_id');
+    if (buildingId && !uuidRegex.test(buildingId)) throw new BadRequestException('Invalid building_id');
+    if (siteId && !uuidRegex.test(siteId)) throw new BadRequestException('Invalid site_id');
+
+    try {
+      return await this.utilityService.findMeters(req.user, unitId, buildingId, siteId);
+    } catch (err: any) { // Change to 'any' or cast inside the block
+      // Log server-side
+      // eslint-disable-next-line no-console
+      console.error('utility.findMeters error', { 
+        err: err?.message || err, 
+        unitId, 
+        buildingId, 
+        siteId 
+      });
+
+      // Return the underlying error message in the HTTP response
+      const message = err?.message || 'Internal server error';
+      const errorType = err?.name || 'InternalServerError';
+
+      throw new HttpException(
+        { statusCode: 500, message, error: errorType }, 
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post('readings')
