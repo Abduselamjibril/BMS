@@ -610,8 +610,10 @@ export class LeasesService {
     });
     if (!lease) throw new NotFoundException('Lease not found');
 
-    if (lease.status !== LeaseStatus.DRAFT) {
-      throw new BadRequestException('Only draft leases can be deleted');
+    // Allow removing drafts and terminated leases. Active or renewed leases
+    // should not be deletable because they affect occupancy/history.
+    if (![LeaseStatus.DRAFT, LeaseStatus.TERMINATED].includes(lease.status)) {
+      throw new BadRequestException('Only draft or terminated leases can be deleted');
     }
 
     await this.leaseRepository.remove(lease);

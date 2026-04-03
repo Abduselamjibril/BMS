@@ -12,6 +12,10 @@ if (!(globalThis as any).crypto) {
   (globalThis as any).crypto = webcrypto;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const userRepo = app.get(getRepositoryToken(User));
@@ -177,7 +181,7 @@ async function bootstrap() {
         console.log('Seeded permission:', p.code);
       }
     } catch (e) {
-      console.warn('Could not seed permission:', p.code, e.message || e);
+      console.warn('Could not seed permission:', p.code, getErrorMessage(e));
     }
   }
 
@@ -290,7 +294,7 @@ async function bootstrap() {
       console.log('Mapped default tenant permissions');
     }
   } catch (e) {
-    console.warn('Could not map role permissions:', e.message || e);
+    console.warn('Could not map role permissions:', getErrorMessage(e));
   }
 
   // Check if super admin user already exists
@@ -306,7 +310,7 @@ async function bootstrap() {
         console.log('Assigned SUPER_ADMIN role to existing user');
       }
     } catch (err) {
-      console.warn('Could not ensure user_role link for existing user:', err.message || err);
+      console.warn('Could not ensure user_role link for existing user:', getErrorMessage(err));
     }
     await app.close();
     return;
@@ -331,7 +335,7 @@ async function bootstrap() {
       console.log('Assigned SUPER_ADMIN role to user');
     }
   } catch (err) {
-    console.warn('Could not ensure user_role link:', err.message || err);
+    console.warn('Could not ensure user_role link:', getErrorMessage(err));
   }
   await app.close();
 }

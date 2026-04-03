@@ -32,4 +32,14 @@ export class CreateMeterDto {
   @IsOptional()
   @IsNumber()
   unit_price?: number;
+
+  @ApiProperty({ example: 'building-uuid', required: false })
+  @IsOptional()
+  @IsString()
+  building_id?: string;
+
+  @ApiProperty({ example: 'site-uuid', required: false })
+  @IsOptional()
+  @IsString()
+  site_id?: string;
 }

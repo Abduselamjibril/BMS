@@ -32,6 +32,12 @@ export class UtilityMeter {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   unit_price?: number;
 
+  @Column({ nullable: true })
+  building_id?: string;
+
+  @Column({ nullable: true })
+  site_id?: string;
+
   @CreateDateColumn()
   created_at!: Date;
 }
