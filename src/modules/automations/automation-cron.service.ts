@@ -141,12 +141,12 @@ export class AutomationCronService implements OnModuleInit {
             end_date: Equal(targetDateStr),
             status: LeaseStatus.ACTIVE,
           },
-          relations: ['tenant', 'unit', 'building'],
+          relations: ['tenant', 'tenant.user', 'unit', 'building'],
         });
 
         for (const lease of leases) {
           await this.notificationService.notify(
-            lease.tenant.id,
+            lease.tenant.user.id,
             'Lease Expiry Reminder',
             `Your lease for unit ${lease.unit.id} is expiring in ${offset} days. Please contact management for renewal.`,
             NotificationType.LEASE,
@@ -174,12 +174,12 @@ export class AutomationCronService implements OnModuleInit {
       
       const dueSoonInvoices = await this.invoiceRepo.find({
         where: { due_date: Equal(dueSoonStr), status: InvoiceStatus.PENDING },
-        relations: ['tenant', 'lease'],
+        relations: ['tenant', 'tenant.user', 'lease'],
       });
 
       for (const invoice of dueSoonInvoices) {
         await this.notificationService.notify(
-          invoice.tenant.id,
+          invoice.tenant.user.id,
           'Upcoming Rent Due',
           `Your rent invoice is due in 5 days.`,
           NotificationType.FINANCE,
@@ -191,14 +191,14 @@ export class AutomationCronService implements OnModuleInit {
       // 2. Overdue
       const overdueInvoices = await this.invoiceRepo.find({
         where: { due_date: LessThanOrEqual(todayStr), status: InvoiceStatus.PENDING },
-        relations: ['tenant', 'lease'],
+        relations: ['tenant', 'tenant.user', 'lease'],
       });
 
       for (const invoice of overdueInvoices) {
         invoice.status = InvoiceStatus.OVERDUE;
         await this.invoiceRepo.save(invoice);
         await this.notificationService.notify(
-          invoice.tenant.id,
+          invoice.tenant.user.id,
           'Late Payment Warning',
           `Your rent invoice is overdue.`,
           NotificationType.FINANCE,
@@ -228,13 +228,13 @@ export class AutomationCronService implements OnModuleInit {
 
         const lease = await this.leaseRepo.findOne({
           where: { unit: { id: unitId }, status: LeaseStatus.ACTIVE },
-          relations: ['tenant'],
+          relations: ['tenant', 'tenant.user'],
         });
 
         if (!lease?.tenant?.id) { skipped++; continue; }
 
         await this.notificationService.notify(
-          lease.tenant.id,
+          lease.tenant.user.id,
           'Utility Bill Pending',
           `A new utility reading has been recorded for your unit.`,
           NotificationType.FINANCE,

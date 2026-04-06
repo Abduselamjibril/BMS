@@ -1,21 +1,38 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Notification, NotificationType } from './entities/notification.entity';
 import { User } from '../users/entities/user.entity';
+import { Lease } from '../leases/entities/lease.entity';
+import { Building } from '../buildings/entities/building.entity';
+import { Site } from '../sites/entities/site.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepo: Repository<Notification>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Lease)
+    private readonly leaseRepo: Repository<any>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
+    @InjectRepository(Site)
+    private readonly siteRepo: Repository<Site>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepo: Repository<Tenant>,
+    @InjectQueue('notification')
+    private readonly notificationQueue: Queue,
   ) {}
 
   /**
    * GENERIC NOTIFICATION METHOD
-   * Used by automation cron jobs, business logic, and internal events.
    */
   async notify(
     userId: string,
@@ -35,26 +52,20 @@ export class NotificationsService {
 
     const saved = await this.notificationRepo.save(notification);
 
-    // [USER FEEDBACK] Trigger Email for necessary notifications
-    await this.sendEmail(userId, title, message);
+    await this.notificationQueue.add('process-notification', {
+      userId,
+      title,
+      message,
+      type,
+    });
 
     return saved;
-  }
-
-  async sendEmail(userId: string, subject: string, body: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user || !user.email) return;
-
-    // Infrastructure: Triggering email logic (Postmark/SendGrid)
-    console.log(`[Email Service] Sending to ${user.email}: ${subject}`);
-    // await this.mailProvider.send({ to: user.email, subject, text: body });
   }
 
   /**
    * IN-APP NOTIFICATIONS MANAGEMENT
    */
 
-  // Fetch all notifications for a specific user
   async getNotifications(userId: string) {
     return this.notificationRepo.find({
       where: { user_id: userId },
@@ -62,7 +73,6 @@ export class NotificationsService {
     });
   }
 
-  // Bulk mark all notifications as read for a user
   async markAllAsRead(userId: string) {
     const result = await this.notificationRepo.update(
       { user_id: userId, is_read: false },
@@ -71,7 +81,14 @@ export class NotificationsService {
     return { updated: result.affected };
   }
 
-  // Delete notification by ID (ensuring it belongs to the user)
+  async markAsRead(id: string, userId: string) {
+    const result = await this.notificationRepo.update(
+      { id, user_id: userId, is_read: false },
+      { is_read: true },
+    );
+    return { updated: result.affected };
+  }
+
   async deleteNotification(id: string, userId: string) {
     const notification = await this.notificationRepo.findOne({
       where: { id, user_id: userId },
@@ -87,98 +104,106 @@ export class NotificationsService {
 
   /**
    * SYSTEM ANNOUNCEMENTS (SUPER ADMIN)
+   * Supports targeting: everyone, specific building, or specific site.
    */
-
   async announce(
     body: {
       title: string;
       message: string;
       type?: string;
       targetUserIds?: string[];
+      buildingId?: string;
+      siteId?: string;
     },
     super_admin_id: string,
   ) {
-    // 1. Determine target users (specific list or everyone)
-    let userIds = body.targetUserIds;
-    if (!userIds || userIds.length === 0) {
+    let userIds: string[] = [];
+
+    if (body.buildingId) {
+      // Target: All tenants in a specific building
+      userIds = await this.getUserIdsByBuilding(body.buildingId);
+      this.logger.log(`Targeted broadcast to building ${body.buildingId}: ${userIds.length} users`);
+    } else if (body.siteId) {
+      // Target: All tenants across all buildings in a site
+      userIds = await this.getUserIdsBySite(body.siteId);
+      this.logger.log(`Targeted broadcast to site ${body.siteId}: ${userIds.length} users`);
+    } else if (body.targetUserIds && body.targetUserIds.length > 0) {
+      // Target: Specific user IDs
+      userIds = body.targetUserIds;
+    } else {
+      // Target: Everyone
       userIds = await this.getAllUserIds();
     }
 
-    // 2. Process notifications for each user
-    const results: Notification[] = [];
+    if (userIds.length === 0) return { sent_count: 0, status: 'No users found for this target' };
+
+    const type = body.type ? (body.type as NotificationType) : NotificationType.ANNOUNCEMENT;
+
+    const notificationsToInsert = userIds.map(userId => ({
+      user_id: userId,
+      title: body.title,
+      message: body.message,
+      type: type,
+      is_read: false,
+    }));
+
+    // Bulk insert
+    await this.notificationRepo.createQueryBuilder()
+      .insert()
+      .into(Notification)
+      .values(notificationsToInsert)
+      .execute();
+
+    // Dispatch background processing (Email + Push)
     for (const userId of userIds) {
-      const notification = this.notificationRepo.create({
-        user_id: userId,
+      await this.notificationQueue.add('process-notification', {
+        userId,
         title: body.title,
         message: body.message,
-        type: body.type
-          ? (body.type as NotificationType)
-          : NotificationType.ANNOUNCEMENT,
-        is_read: false,
-      });
-
-      const saved = await this.notificationRepo.save(notification);
-      results.push(saved);
-
-      // Trigger push for each announcement
-      await this.sendPush({
-        title: body.title,
-        body: body.message,
-        userId: userId,
-        type: body.type || 'ANNOUNCEMENT',
+        type: type,
       });
     }
 
     return {
-      sent_count: results.length,
+      sent_count: userIds.length,
       status: 'Announcements processed successfully',
     };
   }
 
   /**
-   * HELPERS / EXTERNAL INTEGRATION
+   * TARGETING HELPERS
    */
 
-  // Placeholder for FCM (Firebase Cloud Messaging) integration
-  async sendPush(payload: {
-    title: string;
-    body: string;
-    topic?: string;
-    token?: string;
-    type?: string;
-    userId?: string;
-  }) {
-    // Logic to bridge with Firebase Admin SDK or other Push Providers
-    console.log(
-      `[Push Service] Sending to User ${payload.userId}: ${payload.title}`,
-    );
-
-    return {
-      sent: true,
-      provider: 'FCM_STUB',
-      timestamp: new Date().toISOString(),
-      payload,
-    };
-  }
-
-  // Fetch all active user IDs from the database for global announcements
   private async getAllUserIds(): Promise<string[]> {
     const users = await this.userRepo.find({ select: ['id'] });
     return users.map((u) => u.id);
   }
 
-  // Wrapper for super admin announcement flows
-  async sendAnnouncementNotification(
-    userId: string,
-    title: string,
-    message: string,
-    type?: string,
-  ) {
-    return this.sendPush({
-      title,
-      body: message,
-      type: type || 'ANNOUNCEMENT',
-      userId,
+  private async getUserIdsByBuilding(buildingId: string): Promise<string[]> {
+    const leases = await this.leaseRepo.find({
+      where: { building: { id: buildingId }, status: 'ACTIVE' },
+      relations: ['tenant', 'tenant.user'],
     });
+    const ids = leases
+      .filter((l: any) => l.tenant?.user?.id)
+      .map((l: any) => l.tenant.user.id);
+    return [...new Set(ids)]; // deduplicate
+  }
+
+  private async getUserIdsBySite(siteId: string): Promise<string[]> {
+    const buildings = await this.buildingRepo.find({
+      where: { site: { id: siteId } },
+      select: ['id'],
+    });
+    if (buildings.length === 0) return [];
+    const buildingIds = buildings.map(b => b.id);
+    const leases = await this.leaseRepo.find({
+      where: { building: { id: In(buildingIds) }, status: 'ACTIVE' },
+      relations: ['tenant', 'tenant.user'],
+    });
+    const ids = leases
+      .filter((l: any) => l.tenant?.user?.id)
+      .map((l: any) => l.tenant.user.id);
+    return [...new Set(ids)];
   }
 }

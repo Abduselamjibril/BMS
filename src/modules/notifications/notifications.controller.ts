@@ -39,6 +39,12 @@ export class NotificationsController {
     return this.notificationsService.getNotifications(req.user.id);
   }
 
+  @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark a specific notification as read' })
+  async readOne(@Param('id') id: string, @Req() req: any) {
+    return this.notificationsService.markAsRead(id, req.user.id);
+  }
+
   @Patch('read-all')
   @ApiOperation({ summary: 'Mark all notifications as read for current user' })
   async readAll(@Req() req: any) {
@@ -54,7 +60,7 @@ export class NotificationsController {
   // --- SUPER ADMIN / SYSTEM ANNOUNCEMENTS ---
 
   @Post('announce')
-  @ApiOperation({ summary: 'Send announcement to all or specific group' })
+  @ApiOperation({ summary: 'Send announcement to all, building, or site' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -63,6 +69,8 @@ export class NotificationsController {
         message: { type: 'string' },
         type: { type: 'string' },
         targetUserIds: { type: 'array', items: { type: 'string' } },
+        buildingId: { type: 'string', description: 'Target a specific building' },
+        siteId: { type: 'string', description: 'Target a specific site' },
       },
       required: ['title', 'message'],
     },
@@ -74,10 +82,11 @@ export class NotificationsController {
       message: string;
       type?: string;
       targetUserIds?: string[];
+      buildingId?: string;
+      siteId?: string;
     },
     @Req() req: any,
   ) {
-    // If targetUserIds provided, send to those users; else send to all
     return this.notificationsService.announce(body, req.user.id);
   }
 
@@ -161,6 +170,7 @@ export class NotificationsController {
       token?: string;
     },
   ) {
-    return this.notificationsService.sendPush(body);
+    const tokens = body.token ? [body.token] : [];
+    return this.pushNotificationService.sendPush(tokens, body.title, body.body);
   }
 }

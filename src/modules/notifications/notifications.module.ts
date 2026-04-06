@@ -6,17 +6,24 @@ import { NotificationService } from './notification.service';
 import { NotificationsController } from './notifications.controller';
 import { PushNotificationService } from './push-notification.service';
 import { DeviceTokenService } from './device-token.service';
+import { MailService } from './mail.service';
 import { NotificationProcessor } from './notification.processor';
 import { BullModule } from '@nestjs/bullmq';
 import { Notification } from './entities/notification.entity';
 import { UserDeviceToken } from './entities/user-device-token.entity';
 import { User } from '../users/entities/user.entity';
 import { UsersModule } from '../users/users.module';
+import { SettingsModule } from '../settings/settings.module';
+import { Lease } from '../leases/entities/lease.entity';
+import { Building } from '../buildings/entities/building.entity';
+import { Site } from '../sites/entities/site.entity';
+import { Tenant } from '../tenants/entities/tenant.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Notification, UserDeviceToken, User]),
+    TypeOrmModule.forFeature([Notification, UserDeviceToken, User, Lease, Building, Site, Tenant]),
     UsersModule,
+    SettingsModule,
     BullModule.registerQueue({
       name: 'notification',
       connection: {
@@ -29,6 +36,7 @@ import { UsersModule } from '../users/users.module';
     NotificationsService,
     PushNotificationService,
     DeviceTokenService,
+    MailService,
     NotificationService,
     NotificationProcessor,
   ],
