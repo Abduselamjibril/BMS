@@ -53,7 +53,7 @@ export class LeasesService {
     private readonly leasePaymentRepository: Repository<LeasePayment>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
-  ) {}
+  ) { }
 
   private normalizeId(raw?: string): string {
     if (!raw) return raw as unknown as string;
@@ -167,6 +167,7 @@ export class LeasesService {
     currentUserId: string,
     expiringSoon?: boolean,
     status?: string,
+    tenant_id?: string,
   ): Promise<Lease[]> {
     const userRoles = await this.userRoleRepository.find({
       where: { user: { id: currentUserId } },
@@ -204,14 +205,18 @@ export class LeasesService {
         where: { user: { id: currentUserId } },
       });
       if (!tenantRecord) return [];
-      query.andWhere('lease.tenant_id = :tenantId', {
-        tenantId: tenantRecord.id,
+      query.andWhere('lease.tenant_id = :userTenantId', {
+        userTenantId: tenantRecord.id,
       });
     }
     // 4. Default fallback: If no specific role handling matched, return empty or limit (security)
     else {
       // If they are regular admin or similar, maybe they should see everything?
       // depends on the architecture, but usually 'admin' sees all unless explicitly nominee.
+    }
+
+    if (tenant_id) {
+      query.andWhere('lease.tenant_id = :tenantId', { tenantId: tenant_id });
     }
 
     if (expiringSoon) {
@@ -327,7 +332,7 @@ export class LeasesService {
     const end = new Date(lease.end_date);
     const term = new Date(terminationDate);
     const monthsLeft = Math.max(0, (end.getFullYear() - term.getFullYear()) * 12 + (end.getMonth() - term.getMonth()));
-    
+
     let penaltyAmount = 0;
     if (monthsLeft > 0 && penaltyPct > 0) {
       penaltyAmount = monthsLeft * Number(lease.rent_amount) * (Number(penaltyPct) / 100);
@@ -335,7 +340,7 @@ export class LeasesService {
 
     let depositRefund: number | undefined = undefined;
     let newDepositStatus = lease.deposit_status;
-    
+
     if (dto.deposit_deduction !== undefined || penaltyAmount > 0) {
       const deduction = Number(dto.deposit_deduction || 0);
       const refund = Math.max(0, Number(lease.deposit_amount) - deduction - penaltyAmount);
@@ -487,15 +492,15 @@ export class LeasesService {
 
   async getExpiringSummary(): Promise<any> {
     const today = new Date();
-    
+
     const leases = await this.leaseRepository.find({
       where: { status: LeaseStatus.ACTIVE },
     });
-    
+
     let under30 = 0;
     let under60 = 0;
     let under90 = 0;
-    
+
     leases.forEach((l) => {
       const end = new Date(`${l.end_date}T00:00:00`);
       const diffDays = Math.floor((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -503,7 +508,7 @@ export class LeasesService {
       else if (diffDays > 30 && diffDays <= 60) under60++;
       else if (diffDays > 60 && diffDays <= 90) under90++;
     });
-    
+
     return { under30, under60, under90 };
   }
 
@@ -535,7 +540,7 @@ export class LeasesService {
       const endDate = new Date(`${lease.end_date}T00:00:00`);
       const diffDays = Math.floor(
         (endDate.getTime() - new Date(`${todayDate}T00:00:00`).getTime()) /
-          (1000 * 60 * 60 * 24),
+        (1000 * 60 * 60 * 24),
       );
 
       if ([30, 20, 7].includes(diffDays)) {
@@ -582,7 +587,7 @@ export class LeasesService {
     });
 
     let lateFeesApplied = 0;
-    
+
     for (const payment of pendingPayments) {
       if (payment.due_date < todayDate) {
         const dueDateObj = new Date(`${payment.due_date}T00:00:00`);

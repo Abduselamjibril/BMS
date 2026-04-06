@@ -38,12 +38,18 @@ import { TenantDocumentType } from './entities/tenant-document.entity';
 @Controller()
 @Auth()
 export class TenantsController {
-  constructor(private readonly tenantsService: TenantsService) {}
+  constructor(private readonly tenantsService: TenantsService) { }
 
   @Get('tenants')
   @ApiOperation({ summary: 'List tenants' })
   async findAllTenants(@Req() req: any) {
     return this.tenantsService.findAllTenants(req.user.id);
+  }
+
+  @Get('tenants/:id')
+  @ApiOperation({ summary: 'Get a single tenant' })
+  async findOne(@Param('id') id: string) {
+    return this.tenantsService.findOne(id);
   }
 
   @Get('tenants/my-lease')
@@ -106,12 +112,17 @@ export class TenantsController {
 
   @Patch('documents/from-tenant/:tenantId/verify')
   @Permissions('documents:verify')
-  @ApiOperation({ summary: 'Create a tenant document from stored tenant image and verify it' })
+  @ApiOperation({
+    summary: 'Create a tenant document from stored tenant image and verify it',
+  })
   async createAndVerifyFromTenant(
     @Param('tenantId') tenantId: string,
     @Body() body: { type: string },
     @Req() req: any,
   ) {
+    if (body.type === 'ALL') {
+      return this.tenantsService.verifyAllTenantImages(tenantId, req.user);
+    }
     return this.tenantsService.createTenantDocumentFromTenantImage(
       tenantId,
       body.type,

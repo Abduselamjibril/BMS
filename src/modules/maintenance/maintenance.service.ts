@@ -45,7 +45,7 @@ export class MaintenanceService {
     @InjectRepository(Expense)
     private readonly expenseRepo: Repository<Expense>,
     private readonly notificationsService: NotificationsService,
-  ) {}
+  ) { }
 
   private getSlaAcknowledgmentHours(priority: string): number {
     switch (priority?.toLowerCase()) {
@@ -186,7 +186,7 @@ export class MaintenanceService {
     if (!request) {
       throw new NotFoundException('Maintenance request not found.');
     }
-    
+
     const wo = this.workOrderRepo.create({
       assigned_by: assigned_by || 'system',
       contractor: { id: contractor_id },
@@ -272,7 +272,7 @@ export class MaintenanceService {
         where: { id },
         relations: ['request', 'request.unit', 'request.unit.building'],
       });
-      
+
       const buildingId = detailedWO?.request?.unit?.building?.id;
       if (buildingId) {
         await this.expenseRepo.save({
@@ -313,7 +313,7 @@ export class MaintenanceService {
         'Feedback can only be submitted for completed work orders.',
       );
     }
-    
+
     if (workOrder.contractor?.user?.id === dto.tenant_id) {
       throw new BadRequestException('You cannot rate your own work order.');
     }
@@ -358,14 +358,20 @@ export class MaintenanceService {
 
     // 1. Average resolution time in seconds
     const completedOrders = await this.workOrderRepo.find({
-      where: { status: MaintenanceStatus.COMPLETED as any },
+      where: [
+        { status: 'completed' as any },
+        { status: 'COMPLETED' as any },
+        { status: 'closed' as any },
+        { status: 'CLOSED' as any },
+      ],
+      relations: ['contractor'],
     });
 
     const totalResolutionTime = completedOrders.reduce((sum, wo) => {
-      const startTime = wo.started_at?.getTime();
+      const startTime = wo.started_at?.getTime() || wo.created_at?.getTime();
       const completedTime = wo.completed_at?.getTime();
       if (startTime && completedTime) {
-        return sum + (completedTime - startTime);
+        return sum + Math.max(0, completedTime - startTime);
       }
       return sum;
     }, 0);
@@ -378,16 +384,13 @@ export class MaintenanceService {
     const contractors = await this.contractorRepo.find();
     const contractorStats = await Promise.all(
       contractors.map(async (contractor) => {
-        const orders = await this.workOrderRepo.find({
-          where: {
-            contractor: { id: contractor.id },
-            status: MaintenanceStatus.COMPLETED as any,
-          },
-        });
+        const orders = completedOrders.filter(
+          (wo) => wo.contractor?.id === contractor.id,
+        );
 
         const avgCost = orders.length
-          ? orders.reduce((sum, wo) => sum + (wo.actual_cost || 0), 0) /
-            orders.length
+          ? orders.reduce((sum, wo) => sum + Number(wo.actual_cost || 0), 0) /
+          orders.length
           : 0;
 
         return {
@@ -471,13 +474,13 @@ export class MaintenanceService {
         request.sla_deadline = deadline;
 
         await this.requestRepo.save(request);
-        
+
         // Advance next_due_date
         const nextDate = new Date();
         nextDate.setDate(nextDate.getDate() + schedule.frequency_days);
         schedule.next_due_date = nextDate.toISOString().split('T')[0];
         await this.scheduleRepo.save(schedule);
-        
+
         generatedRequests++;
       }
     }
