@@ -28,6 +28,9 @@ export class Payment {
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status!: PaymentStatus;
 
+  @Column({ type: 'text', nullable: true })
+  note?: string;
+
   @CreateDateColumn()
   created_at!: Date;
 }

@@ -121,7 +121,24 @@ export class FinanceController {
     return this.financeService.verifyPayment(id, {
       verified_by,
       status: dto.status,
+      reason: dto.reason,
     });
+  }
+
+  @Get('analytics')
+  @Permissions('finance:analytics:read')
+  @ApiOperation({ summary: 'Get finance dashboard analytics and trends' })
+  @ApiResponse({ status: 200, description: 'Analytics data.' })
+  async getAnalytics() {
+    return this.financeService.getFinanceAnalytics();
+  }
+
+  @Post('invoices/:id/resend')
+  @Permissions('finance:invoices:resend')
+  @ApiOperation({ summary: 'Resend invoice notification to tenant' })
+  @ApiResponse({ status: 200, description: 'Notification resent.' })
+  async resendInvoice(@Param('id') id: string) {
+    return this.financeService.resendInvoiceNotification(id);
   }
 
   @Patch('tax-rules')

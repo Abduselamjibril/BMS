@@ -147,7 +147,10 @@ export class FinanceService {
 
     // Fetch Tax Rules from settings
     const settings = await this.settingsRepo.findOne({ where: {} });
-    const vatRate = settings ? Number(settings.vat_rate) : 0.15;
+    if (!settings) {
+      throw new BadRequestException('Organization settings not found. Please configure tax rules first.');
+    }
+    const vatRate = Number(settings.vat_rate);
 
     // Calculate totals
     const subtotal = dto.items.reduce((sum, item) => sum + item.amount, 0);
@@ -163,7 +166,7 @@ export class FinanceService {
       tax_amount,
       total_amount,
       status: InvoiceStatus.PENDING,
-      invoice_no: 'INV-' + Date.now(),
+      invoice_no: this.generateInvoiceNumber(),
     });
 
     const savedInvoice = await this.invoiceRepo.save(invoice);
@@ -215,9 +218,9 @@ export class FinanceService {
 
   async verifyPayment(
     id: string,
-    dto: { verified_by: string; status: 'confirmed' | 'rejected' },
+    dto: { verified_by: string; status: 'confirmed' | 'rejected'; reason?: string },
   ) {
-    const payment = await this.paymentRepo.findOne({ // Changed this.paymentRepo to this.payRepo
+    const payment = await this.paymentRepo.findOne({
       where: { id },
       relations: ['invoice', 'invoice.tenant'],
     });
@@ -225,8 +228,12 @@ export class FinanceService {
     if (!payment) throw new NotFoundException('Payment record not found');
 
     payment.status = dto.status as PaymentStatus;
+    if (dto.reason) {
+      payment.note = payment.note ? `${payment.note} | Rejection: ${dto.reason}` : `Rejection: ${dto.reason}`;
+    }
+    
     // Update the payment record
-    const updatedPayment = await this.paymentRepo.save(payment); // Changed this.paymentRepo to this.payRepo
+    const updatedPayment = await this.paymentRepo.save(payment);
 
     // If payment is confirmed, update the associated invoice amount_paid
     if (dto.status === 'confirmed' && payment.invoice) {
@@ -242,7 +249,8 @@ export class FinanceService {
       }
       
       await this.invoiceRepo.save(invoice);
-      // Notify tenant
+      
+      // Notify tenant of confirmation
       if (invoice.tenant) {
         await this.notificationsService.notify(
           invoice.tenant.id,
@@ -252,6 +260,15 @@ export class FinanceService {
           { invoiceId: invoice.id, paymentId: payment.id },
         );
       }
+    } else if (dto.status === 'rejected' && payment.invoice?.tenant) {
+      // Notify tenant of rejection with reason
+      await this.notificationsService.notify(
+        payment.invoice.tenant.id,
+        'Payment Rejected',
+        `Your payment of ${payment.amount} for invoice #${payment.invoice.invoice_no} was rejected. Reason: ${dto.reason || 'Information mismatch'}. Please upload a valid receipt.`,
+        NotificationType.FINANCE,
+        { invoiceId: payment.invoice.id, paymentId: payment.id },
+      );
     }
 
     return updatedPayment;
@@ -319,7 +336,11 @@ export class FinanceService {
       .getMany();
 
     const settings = await this.settingsRepo.findOne({ where: {} });
-    const vatRate = settings ? Number(settings.vat_rate) : 0.15;
+    if (!settings) {
+      console.error('Finance Cron: Skipping run - Organization settings not found.');
+      return { invoicesGenerated: 0, lateFeesApplied: 0 };
+    }
+    const vatRate = Number(settings.vat_rate);
     const lateFeeType = settings?.late_fee_type || 'PERCENTAGE';
     const lateFeePct = Number(settings?.late_fee_percentage || 2.0);
     const lateFeeFlat = Number(settings?.late_fee_flat_amount || 0.0);
@@ -340,7 +361,7 @@ export class FinanceService {
           amount_paid: 0,
           late_fee_amount: 0,
           status: InvoiceStatus.PENDING,
-          invoice_no: 'INV-' + lease.lease_number + '-' + Date.now(),
+          invoice_no: this.generateInvoiceNumber(lease.lease_number),
         });
         const savedInvoice = await this.invoiceRepo.save(invoice);
 
@@ -443,15 +464,16 @@ export class FinanceService {
    */
   async getRevenueReport(params: { building_id?: string; month?: string }) {
     const qb = this.paymentRepo.createQueryBuilder('p')
-      .leftJoin('p.invoice', 'inv')
-      .select('inv.building_id', 'building_id')
+      .innerJoin('p.invoice', 'inv')
+      .innerJoin('inv.unit', 'u')
+      .select('u.buildingId', 'building_id')
       .addSelect('SUM(p.amount)', 'total_revenue')
       .where('p.status = :status', { status: 'confirmed' });
 
-    if (params.building_id) qb.andWhere('inv.building_id = :bid', { bid: params.building_id });
-    if (params.month) qb.andWhere('MONTH(p.created_at) = :m', { m: params.month });
+    if (params.building_id) qb.andWhere('u.buildingId = :bid', { bid: params.building_id });
+    if (params.month) qb.andWhere('EXTRACT(MONTH FROM "p"."created_at") = :m', { m: params.month });
     
-    return qb.groupBy('inv.building_id').getRawMany();
+    return qb.groupBy('u.buildingId').getRawMany();
   }
 
   // --- Expenses ---
@@ -476,13 +498,14 @@ export class FinanceService {
   async getPandLReport(params: { building_id?: string; year?: number; month?: number }) {
     // 1. Revenue (Confirmed Payments)
     const revQb = this.paymentRepo.createQueryBuilder('p')
-      .leftJoin('p.invoice', 'inv')
+      .innerJoin('p.invoice', 'inv')
+      .innerJoin('inv.unit', 'u')
       .select('SUM(p.amount)', 'total')
       .where('p.status = :s', { s: 'confirmed' });
     
-    if (params.building_id) revQb.andWhere('inv.building_id = :bid', { bid: params.building_id });
-    if (params.year) revQb.andWhere('YEAR(p.created_at) = :y', { y: params.year });
-    if (params.month) revQb.andWhere('MONTH(p.created_at) = :m', { m: params.month });
+    if (params.building_id) revQb.andWhere('u.buildingId = :bid', { bid: params.building_id });
+    if (params.year) revQb.andWhere('EXTRACT(YEAR FROM "p"."created_at") = :y', { y: params.year });
+    if (params.month) revQb.andWhere('EXTRACT(MONTH FROM "p"."created_at") = :m', { m: params.month });
 
     const revRes = await revQb.getRawOne();
     const totalRevenue = Number(revRes?.total || 0);
@@ -492,8 +515,8 @@ export class FinanceService {
       .select('SUM(e.amount)', 'total');
     
     if (params.building_id) expQb.andWhere('e.building_id = :bid', { bid: params.building_id });
-    if (params.year) expQb.andWhere('YEAR(e.date) = :y', { y: params.year });
-    if (params.month) expQb.andWhere('MONTH(e.date) = :m', { m: params.month });
+    if (params.year) expQb.andWhere('EXTRACT(YEAR FROM e.date) = :y', { y: params.year });
+    if (params.month) expQb.andWhere('EXTRACT(MONTH FROM e.date) = :m', { m: params.month });
 
     const expRes = await expQb.getRawOne();
     const totalExpenses = Number(expRes?.total || 0);
@@ -504,8 +527,8 @@ export class FinanceService {
       .addSelect('SUM(e.amount)', 'total');
     
     if (params.building_id) catQb.andWhere('e.building_id = :bid', { bid: params.building_id });
-    if (params.year) catQb.andWhere('YEAR(e.date) = :y', { y: params.year });
-    if (params.month) catQb.andWhere('MONTH(e.date) = :m', { m: params.month });
+    if (params.year) catQb.andWhere('EXTRACT(YEAR FROM e.date) = :y', { y: params.year });
+    if (params.month) catQb.andWhere('EXTRACT(MONTH FROM e.date) = :m', { m: params.month });
 
     const categories = await catQb.groupBy('e.category').getRawMany();
 
@@ -542,10 +565,13 @@ export class FinanceService {
   }
 
   async getTaxReport(params: { month?: string }) {
+    const settings = await this.settingsRepo.findOne({ where: {} });
+    const withholdingRate = settings ? Number(settings.withholding_rate) : 0.02;
+
     const qb = this.invoiceRepo
       .createQueryBuilder('invoice')
       .select('SUM(invoice.tax_amount)', 'total_vat')
-      .addSelect('SUM(invoice.total_amount * 0.02)', 'total_withholding')
+      .addSelect(`SUM(invoice.total_amount * ${withholdingRate})`, 'total_withholding')
       .where('invoice.status = :status', { status: InvoiceStatus.PAID });
 
     if (params.month) {
@@ -553,6 +579,12 @@ export class FinanceService {
     }
 
     return qb.getRawOne();
+  }
+
+  private generateInvoiceNumber(leaseSuffix?: string): string {
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `INV-${datePart}-${randomPart}${leaseSuffix ? '-' + leaseSuffix : ''}`;
   }
 
   async getTenantLedger(tenantId: string) {
@@ -615,6 +647,7 @@ export class FinanceService {
 
     if (!payment) throw new NotFoundException('Payment not found');
 
+    const settings = await this.settingsRepo.findOne({ where: {} });
     const tenantName = `${payment.invoice.tenant.first_name} ${payment.invoice.tenant.last_name}`;
 
     return this.financePdfService.generateReceiptPdf({
@@ -624,6 +657,8 @@ export class FinanceService {
       tenant_name: tenantName,
       invoice_no: payment.invoice.invoice_no,
       reference_no: payment.reference_no,
+      company_name: settings?.company_name,
+      logo_path: settings?.logo_path,
     });
   }
 
@@ -632,9 +667,13 @@ export class FinanceService {
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const ledger = await this.getTenantLedger(tenantId);
+    const settings = await this.settingsRepo.findOne({ where: {} });
     const tenantName = `${tenant.first_name} ${tenant.last_name}`;
 
-    return this.financePdfService.generateLedgerPdf(tenantName, ledger);
+    return this.financePdfService.generateLedgerPdf(tenantName, ledger, {
+      company_name: settings?.company_name,
+      logo_path: settings?.logo_path,
+    });
   }
 
   async getTenantSummary(userId: string) {
@@ -659,9 +698,108 @@ export class FinanceService {
     const soonestInvoice = invoices.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
 
     return {
+      id: tenant.id,
       totalBalanceDue,
       nextDueDate: soonestInvoice?.due_date || null,
       invoiceCount: invoices.length,
     };
+  }
+
+  /**
+   * ADVANCED ANALYTICS
+   */
+  async getFinanceAnalytics() {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    const lastMonthDate = new Date();
+    lastMonthDate.setMonth(now.getMonth() - 1);
+    const lastMonth = lastMonthDate.getMonth() + 1;
+    const lastYear = lastMonthDate.getFullYear();
+
+    // 1. Revenue Trends (Actual Received)
+    const currentRevenue = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select('SUM(p.amount)', 'total')
+      .where('p.status = :status', { status: 'confirmed' })
+      .andWhere('EXTRACT(MONTH FROM p.created_at) = :month', { month: currentMonth })
+      .andWhere('EXTRACT(YEAR FROM p.created_at) = :year', { year: currentYear })
+      .getRawOne();
+
+    const previousRevenue = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select('SUM(p.amount)', 'total')
+      .where('p.status = :status', { status: 'confirmed' })
+      .andWhere('EXTRACT(MONTH FROM p.created_at) = :month', { month: lastMonth })
+      .andWhere('EXTRACT(YEAR FROM p.created_at) = :year', { year: lastYear })
+      .getRawOne();
+
+    const cur = Number(currentRevenue?.total || 0);
+    const prev = Number(previousRevenue?.total || 0);
+    const trend = prev === 0 ? (cur > 0 ? 100 : 0) : ((cur - prev) / prev) * 100;
+
+    // 2. 6-Month Chart Data
+    const chartData: any[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(now.getMonth() - i);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      const mName = d.toLocaleString('default', { month: 'short' });
+
+      const res = await this.paymentRepo
+        .createQueryBuilder('p')
+        .select('SUM(p.amount)', 'total')
+        .where('p.status = :status', { status: 'confirmed' })
+        .andWhere('EXTRACT(MONTH FROM p.created_at) = :month', { month: m })
+        .andWhere('EXTRACT(YEAR FROM p.created_at) = :year', { year: y })
+        .getRawOne();
+      
+      chartData.push({ month: mName, year: y, total: Number(res?.total || 0) });
+    }
+
+    // 3. Outstanding Balance per Building
+    const buildingArrears = await this.invoiceRepo
+      .createQueryBuilder('inv')
+      .leftJoin('inv.unit', 'u')
+      .select('u.building_id', 'building_id')
+      .addSelect('SUM(inv.total_amount - inv.amount_paid)', 'outstanding')
+      .where('inv.status IN (:...statuses)', { statuses: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] })
+      .groupBy('u.building_id')
+      .getRawMany();
+
+    return {
+      revenueTrend: {
+        current: cur,
+        previous: prev,
+        percentage: trend,
+        direction: trend >= 0 ? 'up' : 'down',
+      },
+      chartData,
+      buildingStats: buildingArrears.map(b => ({
+        buildingId: b.building_id,
+        outstanding: Number(b.outstanding || 0)
+      }))
+    };
+  }
+
+  async resendInvoiceNotification(id: string) {
+    const invoice = await this.invoiceRepo.findOne({
+      where: { id },
+      relations: ['tenant'],
+    });
+
+    if (!invoice || !invoice.tenant) throw new NotFoundException('Invoice or tenant not found');
+
+    await this.notificationsService.notify(
+      invoice.tenant.id,
+      'Invoice Reminder',
+      `This is a reminder for invoice #${invoice.invoice_no} due on ${invoice.due_date}. Total: ${invoice.total_amount}`,
+      NotificationType.FINANCE,
+      { invoiceId: invoice.id },
+    );
+
+    return { success: true };
   }
 }

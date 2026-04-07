@@ -6,4 +6,10 @@ export class VerifyPaymentDto {
     enum: ['confirmed', 'rejected'],
   })
   status!: 'confirmed' | 'rejected';
+
+  @ApiProperty({
+    description: 'Reason for rejection (optional)',
+    required: false,
+  })
+  reason?: string;
 }

@@ -14,6 +14,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
+import { forwardRef } from '@nestjs/common';
+import { LeasesModule } from '../leases/leases.module';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { Tenant } from '../tenants/entities/tenant.entity';
       Tenant,
     ]),
     NotificationsModule,
+    forwardRef(() => LeasesModule),
     BullModule.registerQueue({
       name: 'monthly-invoice',
     }),

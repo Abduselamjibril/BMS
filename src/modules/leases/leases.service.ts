@@ -3,6 +3,8 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -27,6 +29,8 @@ import { BuildingAdminAssignment } from '../buildings/entities/building-admin-as
 // RoleName enum removed
 import { UserRole } from '../roles/entities/user-role.entity';
 import { LeasePdfService } from './services/lease-pdf.service';
+import { FinanceService } from '../finance/finance.service';
+import { InvoiceItemType } from '../finance/entities/invoice-item.entity';
 
 @Injectable()
 export class LeasesService {
@@ -53,6 +57,8 @@ export class LeasesService {
     private readonly leasePaymentRepository: Repository<LeasePayment>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
+    @Inject(forwardRef(() => FinanceService))
+    private readonly financeService: FinanceService,
   ) {}
 
   private normalizeId(raw?: string): string {
@@ -353,6 +359,23 @@ export class LeasesService {
         lease.deposit_status = newDepositStatus;
       }
       await manager.getRepository(Lease).save(lease);
+
+      // Automated Invoicing for Penalty
+      if (penaltyAmount > 0) {
+        await this.financeService.createInvoice({
+          lease_id: lease.id,
+          tenant_id: lease.tenant.id,
+          unit_id: lease.unit.id,
+          due_date: terminationDate,
+          items: [
+            {
+              type: InvoiceItemType.PENALTY,
+              amount: penaltyAmount,
+              description: `Early termination penalty for Lease ${lease.lease_number} (Organization Policy)`,
+            },
+          ],
+        });
+      }
 
       const unit = await manager
         .getRepository(Unit)

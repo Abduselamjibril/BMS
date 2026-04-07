@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class FinancePdfService {
@@ -10,6 +12,8 @@ export class FinancePdfService {
     tenant_name: string;
     invoice_no: string;
     reference_no: string;
+    company_name?: string;
+    logo_path?: string;
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50 });
@@ -19,8 +23,16 @@ export class FinancePdfService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err) => reject(err));
 
-      // Header
-      doc.fontSize(20).text('OFFICIAL RECEIPT', { align: 'center' });
+      // Brand / Header
+      if (data.logo_path && fs.existsSync(data.logo_path)) {
+        doc.image(data.logo_path, 50, 45, { width: 50 });
+        doc.moveDown();
+      }
+
+      doc.fontSize(20).text(data.company_name || 'OFFICIAL RECEIPT', { align: 'center' });
+      if (data.company_name) {
+          doc.fontSize(10).text('OFFICIAL RECEIPT', { align: 'center' });
+      }
       doc.moveDown();
 
       // Details
@@ -45,7 +57,7 @@ export class FinancePdfService {
     });
   }
 
-  async generateLedgerPdf(tenantName: string, ledger: any[]): Promise<Buffer> {
+  async generateLedgerPdf(tenantName: string, ledger: any[], branding?: { company_name?: string; logo_path?: string }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50 });
       const chunks: Buffer[] = [];
@@ -54,8 +66,16 @@ export class FinancePdfService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err) => reject(err));
 
-      // Header
-      doc.fontSize(20).text('TENANT STATEMENT', { align: 'center' });
+      // Brand / Header
+      if (branding?.logo_path && fs.existsSync(branding.logo_path)) {
+        doc.image(branding.logo_path, 50, 45, { width: 50 });
+        doc.moveDown();
+      }
+
+      doc.fontSize(20).text(branding?.company_name || 'TENANT STATEMENT', { align: 'center' });
+      if (branding?.company_name) {
+          doc.fontSize(10).text('TENANT STATEMENT', { align: 'center' });
+      }
       doc.moveDown();
 
       doc.fontSize(12).text(`Tenant: ${tenantName}`);
