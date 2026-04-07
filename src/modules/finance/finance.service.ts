@@ -62,11 +62,29 @@ export class FinanceService {
    * BANK ACCOUNTS
    */
   async createBankAccount(dto: CreateBankAccountDto) {
-    return this.bankAccountRepo.save(dto);
+    const account = this.bankAccountRepo.create({
+      ...dto,
+      current_balance: dto.opening_balance, // Initialize current balance with opening balance
+    });
+    return this.bankAccountRepo.save(account);
   }
 
   async getBankAccounts() {
     return this.bankAccountRepo.find();
+  }
+
+  async updateBankAccount(id: string, dto: Partial<CreateBankAccountDto>) {
+    const account = await this.bankAccountRepo.findOne({ where: { id } });
+    if (!account) throw new NotFoundException('Bank account not found');
+    Object.assign(account, dto);
+    return this.bankAccountRepo.save(account);
+  }
+
+  async deleteBankAccount(id: string) {
+    const account = await this.bankAccountRepo.findOne({ where: { id } });
+    if (!account) throw new NotFoundException('Bank account not found');
+    await this.bankAccountRepo.remove(account);
+    return { deleted: true };
   }
 
   /**
@@ -87,6 +105,7 @@ export class FinanceService {
       .leftJoinAndSelect('invoice.unit', 'unit')
       .leftJoinAndSelect('invoice.lease', 'lease')
       .leftJoinAndSelect('invoice.payments', 'payments')
+      .leftJoinAndSelect('payments.bank_account', 'bank_account')
       .leftJoinAndSelect('invoice.items', 'items');
 
     if (authenticatedUser) {
@@ -166,14 +185,16 @@ export class FinanceService {
       tax_amount,
       total_amount,
       status: InvoiceStatus.PENDING,
-      invoice_no: this.generateInvoiceNumber(),
+      invoice_no: await this.generateInvoiceNumber(),
     });
 
     const savedInvoice = await this.invoiceRepo.save(invoice);
+    let totalSettled = 0;
+    let currentAdvance = Number(lease.advance_balance || 0);
 
-    // Save individual invoice items
+    // Save individual invoice items AND handle Rent-Only Auto-Settlement
     for (const item of dto.items) {
-      await this.invoiceItemRepo.save(
+      const savedItem = await this.invoiceItemRepo.save(
         this.invoiceItemRepo.create({
           invoice: savedInvoice,
           type: item.type,
@@ -181,7 +202,45 @@ export class FinanceService {
           description: item.description,
         }),
       );
+
+      // Auto-settlement logic specifically for RENT
+      if (item.type === InvoiceItemType.RENT && currentAdvance > 0) {
+        const itemGross = Number(item.amount) * (1 + vatRate);
+        const canSettle = Math.min(currentAdvance, itemGross);
+        
+        if (canSettle > 0) {
+          totalSettled += canSettle;
+          currentAdvance -= canSettle;
+          
+          // Log the internal settlement payment
+          await this.paymentRepo.save(
+            this.paymentRepo.create({
+              invoice: savedInvoice,
+              amount: canSettle,
+              reference_no: `AUTO-SETTLE-${savedInvoice.invoice_no}`,
+              status: PaymentStatus.CONFIRMED,
+              note: `Auto-settlement from Advance Balance for ${item.type}`,
+            }),
+          );
+        }
+      }
     }
+
+    // Update Invoice and Lease with settlement results
+    if (totalSettled > 0) {
+      savedInvoice.amount_paid = Number(savedInvoice.amount_paid || 0) + totalSettled;
+      if (savedInvoice.amount_paid >= Number(savedInvoice.total_amount)) {
+        savedInvoice.status = InvoiceStatus.PAID;
+      } else {
+        savedInvoice.status = InvoiceStatus.PARTIAL;
+      }
+      await this.invoiceRepo.save(savedInvoice);
+
+      const leaseRepo = this.dataSource.getRepository(Lease);
+      await leaseRepo.update(lease.id, { advance_balance: currentAdvance });
+    }
+
+    return savedInvoice;
 
     return savedInvoice;
   }
@@ -213,7 +272,13 @@ export class FinanceService {
       ...dto,
       invoice,
     });
-    return this.paymentRepo.save(payment);
+    const savedPayment = await this.paymentRepo.save(payment);
+
+    // Update invoice status to PROCESSING
+    invoice.status = InvoiceStatus.PROCESSING;
+    await this.invoiceRepo.save(invoice);
+
+    return savedPayment;
   }
 
   async verifyPayment(
@@ -222,7 +287,7 @@ export class FinanceService {
   ) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
-      relations: ['invoice', 'invoice.tenant'],
+      relations: ['invoice', 'invoice.tenant', 'invoice.lease', 'bank_account'],
     });
 
     if (!payment) throw new NotFoundException('Payment record not found');
@@ -235,12 +300,16 @@ export class FinanceService {
     // Update the payment record
     const updatedPayment = await this.paymentRepo.save(payment);
 
-    // If payment is confirmed, update the associated invoice amount_paid
+    // If payment is confirmed, update the associated invoice amount_paid and bank balance
     if (dto.status === 'confirmed' && payment.invoice) {
       const invoice = payment.invoice;
       const totalDue = Number(invoice.total_amount) + Number(invoice.late_fee_amount);
+      const remainingBeforePayment = totalDue - Number(invoice.amount_paid);
       
       invoice.amount_paid = Number(invoice.amount_paid) + Number(payment.amount);
+      
+      // Calculate overpayment
+      const overpayment = Math.max(0, Number(payment.amount) - remainingBeforePayment);
       
       if (invoice.amount_paid >= totalDue) {
         invoice.status = InvoiceStatus.PAID;
@@ -249,26 +318,52 @@ export class FinanceService {
       }
       
       await this.invoiceRepo.save(invoice);
+
+      // Handle Overpayment -> Advance Balance
+      if (overpayment > 0 && invoice.lease) {
+        const leaseRepo = this.dataSource.getRepository(Lease);
+        invoice.lease.advance_balance = Number(invoice.lease.advance_balance) + overpayment;
+        await leaseRepo.save(invoice.lease);
+      }
+
+      // Update Selected or Default Bank Account Balance
+      let bankToUpdate: BankAccount | null = payment.bank_account || null;
+      if (!bankToUpdate) {
+        const defaultBank = await this.bankAccountRepo.findOne({ where: { is_default: true } });
+        bankToUpdate = defaultBank || (await this.bankAccountRepo.findOne({ where: {} }));
+      }
+      
+      if (bankToUpdate) {
+        bankToUpdate.current_balance = Number(bankToUpdate.current_balance) + Number(payment.amount);
+        await this.bankAccountRepo.save(bankToUpdate);
+      }
       
       // Notify tenant of confirmation
       if (invoice.tenant) {
         await this.notificationsService.notify(
           invoice.tenant.id,
           'Payment Confirmed',
-          `Your payment of ${payment.amount} for invoice #${invoice.invoice_no} has been verified.`,
+          `Payment Confirmed`,
           NotificationType.FINANCE,
           { invoiceId: invoice.id, paymentId: payment.id },
         );
       }
-    } else if (dto.status === 'rejected' && payment.invoice?.tenant) {
-      // Notify tenant of rejection with reason
-      await this.notificationsService.notify(
-        payment.invoice.tenant.id,
-        'Payment Rejected',
-        `Your payment of ${payment.amount} for invoice #${payment.invoice.invoice_no} was rejected. Reason: ${dto.reason || 'Information mismatch'}. Please upload a valid receipt.`,
-        NotificationType.FINANCE,
-        { invoiceId: payment.invoice.id, paymentId: payment.id },
-      );
+    } else if (dto.status === 'rejected' && payment.invoice) {
+      // Revert invoice status from PROCESSING to DRAFT (as requested)
+      const invoice = payment.invoice;
+      invoice.status = InvoiceStatus.DRAFT;
+      await this.invoiceRepo.save(invoice);
+
+      if (invoice.tenant) {
+        // Notify tenant of rejection with the specific requested message
+        await this.notificationsService.notify(
+          invoice.tenant.id,
+          'Payment Rejected',
+          `Payment Rejected: please pay or send the right receipt and reference`,
+          NotificationType.FINANCE,
+          { invoiceId: invoice.id, paymentId: payment.id },
+        );
+      }
     }
 
     return updatedPayment;
@@ -361,7 +456,7 @@ export class FinanceService {
           amount_paid: 0,
           late_fee_amount: 0,
           status: InvoiceStatus.PENDING,
-          invoice_no: this.generateInvoiceNumber(lease.lease_number),
+          invoice_no: await this.generateInvoiceNumber(),
         });
         const savedInvoice = await this.invoiceRepo.save(invoice);
 
@@ -477,9 +572,42 @@ export class FinanceService {
   }
 
   // --- Expenses ---
-  async createExpense(dto: CreateExpenseDto) { // Changed dto type to CreateExpenseDto
+  async createExpense(dto: CreateExpenseDto) {
     const expense = this.expenseRepo.create(dto);
-    return this.expenseRepo.save(expense);
+    const savedExpense = await this.expenseRepo.save(expense);
+
+    // If a bank account is linked, decrement its balance
+    if (dto.bank_account_id) {
+      const bank = await this.bankAccountRepo.findOne({ where: { id: dto.bank_account_id } });
+      if (bank) {
+        bank.current_balance = Number(bank.current_balance) - Number(dto.amount);
+        await this.bankAccountRepo.save(bank);
+      }
+    }
+
+    return savedExpense;
+  }
+
+  async verifyDepositAdvice(id: string, status: 'confirmed' | 'rejected', processedBy: string) {
+    const advice = await this.depositAdviceRepo.findOne({ 
+      where: { id },
+      relations: ['bank_account']
+    });
+    if (!advice) throw new NotFoundException('Deposit advice not found');
+
+    const oldStatus = advice.status;
+    advice.status = status;
+    advice.processed_by = processedBy;
+    const updated = await this.depositAdviceRepo.save(advice);
+
+    // If confirmed and was pending, increment the bank balance
+    if (status === 'confirmed' && oldStatus !== 'confirmed' && advice.bank_account) {
+      const bank = advice.bank_account;
+      bank.current_balance = Number(bank.current_balance) + Number(advice.amount);
+      await this.bankAccountRepo.save(bank);
+    }
+
+    return updated;
   }
 
   async getExpenses(params: { building_id?: string; category?: string; start_date?: string; end_date?: string }) {
@@ -492,6 +620,13 @@ export class FinanceService {
     if (params.end_date) qb.andWhere('e.date <= :e', { e: params.end_date });
 
     return qb.orderBy('e.date', 'DESC').getMany();
+  }
+
+  async getDepositAdvices() {
+    return this.depositAdviceRepo.find({
+      relations: ['bank_account'],
+      order: { created_at: 'DESC' }
+    });
   }
 
   // --- Profit & Loss ---
@@ -581,10 +716,17 @@ export class FinanceService {
     return qb.getRawOne();
   }
 
-  private generateInvoiceNumber(leaseSuffix?: string): string {
-    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `INV-${datePart}-${randomPart}${leaseSuffix ? '-' + leaseSuffix : ''}`;
+  private async generateInvoiceNumber(): Promise<string> {
+    const result = await this.invoiceRepo
+      .createQueryBuilder('invoice')
+      // Only pick invoices that follow the 'INV-digits' strictly (e.g. INV-001)
+      // This ignores old alphanumeric or date-based numbers (e.g. INV-20260407-ABCD)
+      .select('MAX(CAST(SUBSTRING(invoice.invoice_no, 5) AS BIGINT))', 'max')
+      .where("invoice.invoice_no ~ '^INV-[0-9]+$'")
+      .getRawOne();
+
+    const nextNumber = (parseInt(result?.max, 10) || 0) + 1;
+    return `INV-${nextNumber.toString().padStart(3, '0')}`;
   }
 
   async getTenantLedger(tenantId: string) {
@@ -763,10 +905,10 @@ export class FinanceService {
     const buildingArrears = await this.invoiceRepo
       .createQueryBuilder('inv')
       .leftJoin('inv.unit', 'u')
-      .select('u.building_id', 'building_id')
+      .select('u."buildingId"', 'building_id')
       .addSelect('SUM(inv.total_amount - inv.amount_paid)', 'outstanding')
       .where('inv.status IN (:...statuses)', { statuses: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] })
-      .groupBy('u.building_id')
+      .groupBy('u."buildingId"')
       .getRawMany();
 
     return {

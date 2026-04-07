@@ -36,7 +36,7 @@ export class UploadController {
 
   @Post('image')
   @ApiOperation({ summary: 'Upload a single image (JPEG/PNG, max 5MB)' })
-  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'] })
+  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'] })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -55,7 +55,7 @@ export class UploadController {
       storage: diskStorage({
         destination: (req, file, cb) => {
           const type = (req.query.type as string) || (req.body?.type as string) || 'misc';
-          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'];
           const folder = validTypes.includes(type) ? type : 'misc';
           const dir = `./uploads/${folder}`;
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -83,7 +83,7 @@ export class UploadController {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
     }
     const typeStr = type || bodyType || 'misc';
-    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'];
     const folder = validTypes.includes(typeStr) ? typeStr : 'misc';
     return { path: `/uploads/${folder}/${file.filename}` };
   }
@@ -102,14 +102,14 @@ export class UploadController {
       },
     },
   })
-  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'] })
+  @ApiQuery({ name: 'type', required: false, enum: ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'] })
   @ApiResponse({ status: 201, description: 'Document uploaded successfully.' })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (req, file, cb) => {
           const type = (req.query.type as string) || (req.body?.type as string) || 'misc';
-          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+          const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'];
           const folder = validTypes.includes(type) ? type : 'misc';
           const dir = `./uploads/${folder}`;
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -142,7 +142,7 @@ export class UploadController {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
     }
     const typeStr = type || bodyType || 'misc';
-    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'misc'];
+    const validTypes = ['buildings', 'sites', 'owners', 'units', 'users', 'amenities', 'documents', 'tenants', 'finance', 'misc'];
     const folder = validTypes.includes(typeStr) ? typeStr : 'misc';
     return { path: `/uploads/${folder}/${file.filename}` };
   }

@@ -17,6 +17,8 @@ export enum InvoiceStatus {
   PARTIAL = 'partial',
   OVERDUE = 'overdue',
   CANCELLED = 'cancelled',
+  PROCESSING = 'processing',
+  DRAFT = 'draft',
 }
 
 @Entity('invoices')

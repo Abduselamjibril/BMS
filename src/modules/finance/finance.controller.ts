@@ -22,6 +22,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
+import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
 import { PatchTaxRulesDto } from './dto/patch-tax-rules.dto';
 import { GenerateInvoicesDto } from './dto/generate-invoices.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -181,6 +182,22 @@ export class FinanceController {
     return this.financeService.getBankAccounts();
   }
 
+  @Patch('bank-accounts/:id')
+  @Permissions('finance:bank_accounts:update')
+  @ApiOperation({ summary: 'Update a bank account' })
+  @ApiResponse({ status: 200, description: 'Bank account updated.' })
+  async updateBankAccount(@Param('id') id: string, @Body() dto: UpdateBankAccountDto) {
+    return this.financeService.updateBankAccount(id, dto);
+  }
+
+  @Delete('bank-accounts/:id')
+  @Permissions('finance:bank_accounts:delete')
+  @ApiOperation({ summary: 'Delete a bank account' })
+  @ApiResponse({ status: 200, description: 'Bank account deleted.' })
+  async deleteBankAccount(@Param('id') id: string) {
+    return this.financeService.deleteBankAccount(id);
+  }
+
   @Post('invoices')
   @Permissions('finance:invoices:create')
   @ApiOperation({ summary: 'Create an invoice' })
@@ -237,6 +254,25 @@ export class FinanceController {
   })
   async createDepositAdvice(@Body() dto: CreateDepositAdviceDto) {
     return this.financeService.createDepositAdvice(dto);
+  }
+
+  @Get('deposit-advice')
+  @Permissions('finance:deposit_advice:read')
+  @ApiOperation({ summary: 'List all deposit advice entries' })
+  async getDepositAdvices() {
+    return this.financeService.getDepositAdvices();
+  }
+
+  @Patch('deposit-advice/:id/verify')
+  @Permissions('finance:deposit_advice:verify')
+  @ApiOperation({ summary: 'Verify or reject a deposit advice' })
+  async verifyDepositAdvice(
+    @Param('id') id: string,
+    @Body() dto: { status: 'confirmed' | 'rejected' },
+    @Req() req: any,
+  ) {
+    const processedBy = req.user.id;
+    return this.financeService.verifyDepositAdvice(id, dto.status, processedBy);
   }
 
   @Post('invoices/generate')

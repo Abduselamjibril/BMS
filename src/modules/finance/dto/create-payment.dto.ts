@@ -18,4 +18,9 @@ export class CreatePaymentDto {
   @IsString()
   @IsOptional()
   proof_url?: string;
+
+  @ApiProperty({ example: 'a7d4c5e4-1a1a-413a-aa3d-4c362020d3e8', description: 'Selected bank account ID' })
+  @IsUUID()
+  @IsOptional()
+  bank_account_id?: string;
 }

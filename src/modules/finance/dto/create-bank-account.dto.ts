@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsString, IsNumber } from 'class-validator';
 
 export class CreateBankAccountDto {
   @ApiProperty()
@@ -13,4 +13,8 @@ export class CreateBankAccountDto {
   @ApiProperty()
   @IsString()
   branch!: string;
+
+  @ApiProperty({ example: 1000.0, description: 'Initial opening balance' })
+  @IsNumber()
+  opening_balance!: number;
 }

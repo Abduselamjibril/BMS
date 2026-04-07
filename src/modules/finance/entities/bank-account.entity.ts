@@ -16,4 +16,13 @@ export class BankAccount {
 
   @Column({ default: 'active' })
   status!: string;
+
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  opening_balance!: number;
+
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  current_balance!: number;
+
+  @Column({ default: false })
+  is_default!: boolean;
 }

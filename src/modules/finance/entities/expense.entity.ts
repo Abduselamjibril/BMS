@@ -25,6 +25,16 @@ export class Expense {
   @JoinColumn({ name: 'building_id' })
   building: Building;
 
+  @Column({ nullable: true })
+  bank_account_id: string;
+
+  @ManyToOne('BankAccount', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'bank_account_id' })
+  bankAccount: any;
+
+  @Column({ nullable: true, length: 500 })
+  receipt_url: string;
+
   @CreateDateColumn()
   created_at: Date;
 }

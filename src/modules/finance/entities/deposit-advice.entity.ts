@@ -17,4 +17,13 @@ export class DepositAdvice {
 
   @Column({ length: 50 })
   reference_no!: string;
+
+  @Column({ default: 'pending' })
+  status!: string;
+
+  @Column({ nullable: true })
+  processed_by!: string;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  created_at!: Date;
 }

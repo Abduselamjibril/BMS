@@ -98,6 +98,9 @@ export class Lease {
   @Column({ type: 'date', nullable: true })
   next_billing_date?: string;
 
+  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  advance_balance!: number;
+
   @CreateDateColumn()
   created_at!: Date;
 

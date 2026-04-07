@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID, IsNumber, IsDateString, IsString } from 'class-validator';
+import { IsUUID, IsNumber, IsDateString, IsString, IsOptional } from 'class-validator';
 
 export class CreateDepositAdviceDto {
   @ApiProperty()
@@ -17,4 +17,9 @@ export class CreateDepositAdviceDto {
   @ApiProperty()
   @IsString()
   reference_no!: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  proof_url?: string;
 }

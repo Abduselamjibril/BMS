@@ -20,4 +20,12 @@ export class CreateExpenseDto {
   @IsUUID()
   @IsOptional()
   building_id?: string;
+
+  @IsUUID()
+  @IsOptional()
+  bank_account_id?: string;
+
+  @IsString()
+  @IsOptional()
+  receipt_url?: string;
 }

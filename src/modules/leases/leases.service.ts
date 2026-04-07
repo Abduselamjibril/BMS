@@ -349,11 +349,13 @@ export class LeasesService {
     let depositRefund: number | undefined = undefined;
     let newDepositStatus = lease.deposit_status;
 
-    if (dto.deposit_deduction !== undefined || penaltyAmount > 0) {
+    const totalHeld = Number(lease.deposit_amount) + Number(lease.advance_balance || 0);
+
+    if (dto.deposit_deduction !== undefined || penaltyAmount > 0 || Number(lease.advance_balance) > 0) {
       const deduction = Number(dto.deposit_deduction || 0);
-      const refund = Math.max(0, Number(lease.deposit_amount) - deduction - penaltyAmount);
+      const refund = Math.max(0, totalHeld - deduction - penaltyAmount);
       depositRefund = refund;
-      newDepositStatus = refund > 0 && refund < Number(lease.deposit_amount) ? DepositStatus.PARTIALLY_REFUNDED : DepositStatus.REFUNDED;
+      newDepositStatus = refund > 0 && refund < totalHeld ? DepositStatus.PARTIALLY_REFUNDED : DepositStatus.REFUNDED;
     }
 
     await this.dataSource.transaction(async (manager) => {
@@ -364,8 +366,20 @@ export class LeasesService {
         lease.deposit_refund_amount = depositRefund;
         lease.deposit_refund_date = new Date().toISOString().split('T')[0];
         lease.deposit_status = newDepositStatus;
+        lease.advance_balance = 0; // Balance cleared as it's being refunded/applied
       }
       await manager.getRepository(Lease).save(lease);
+
+      // 1. Create Finance Expense for Refund
+      if (depositRefund && depositRefund > 0) {
+        await this.financeService.createExpense({
+          amount: depositRefund,
+          date: new Date().toISOString().split('T')[0],
+          category: 'Refund',
+          description: `Security Deposit & Advance Rent Refund for Lease ${lease.lease_number}`,
+          building_id: lease.building.id,
+        });
+      }
 
       // Automated Invoicing for Penalty
       if (penaltyAmount > 0) {
