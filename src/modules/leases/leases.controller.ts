@@ -38,7 +38,7 @@ import { UploadLeaseDocDto } from './dto/upload-lease-doc.dto';
 @Controller()
 @Auth()
 export class LeasesController {
-  constructor(private readonly leasesService: LeasesService) {}
+  constructor(private readonly leasesService: LeasesService) { }
 
   @Post('leases')
   @Permissions('leases:create')
@@ -55,13 +55,15 @@ export class LeasesController {
   })
   @ApiQuery({ name: 'expiringSoon', required: false, type: Boolean })
   @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'tenant_id', required: false, type: String })
   async findAll(
     @Req() req: any,
     @Query('expiringSoon', new ParseBoolPipe({ optional: true }))
     expiringSoon?: boolean,
     @Query('status') status?: string,
+    @Query('tenant_id') tenant_id?: string,
   ) {
-    return this.leasesService.findAll(req.user.id, expiringSoon, status);
+    return this.leasesService.findAll(req.user.id, expiringSoon, status, tenant_id);
   }
 
   @Get('leases/expiring-summary')

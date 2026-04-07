@@ -65,7 +65,7 @@ export class TenantsService {
     private readonly roleRepository: Repository<Role>,
     private readonly notificationsService: NotificationsService,
     private readonly leasesService: LeasesService,
-  ) {}
+  ) { }
 
   async register(dto: RegisterTenantDto): Promise<Tenant> {
     const userEmailExists = await this.userRepository.findOne({
@@ -136,7 +136,20 @@ export class TenantsService {
     return this.tenantRepository.save(tenant);
   }
 
-  async findAllTenants(currentUserId: string): Promise<Tenant[]> {
+  async findOne(id: string): Promise<Tenant> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return tenant;
+  }
+
+  async findAllTenants(currentUserId: string): Promise<any[]> {
     const roles = await this.userRoleRepository.find({
       where: { user: { id: currentUserId } },
       relations: ['role'],
@@ -147,8 +160,25 @@ export class TenantsService {
       throw new ForbiddenException('Only super admins can view tenants');
     }
 
-    return this.tenantRepository.find({
+    const tenants = await this.tenantRepository.find({
       order: { created_at: 'DESC' },
+    });
+
+    if (tenants.length === 0) return tenants;
+
+    const tenantIds = tenants.map(t => t.id);
+    const leases = await this.leaseRepository.find({
+      where: { tenant: { id: In(tenantIds) } },
+      relations: ['tenant', 'building', 'unit'],
+      order: { created_at: 'DESC' },
+    });
+
+    return tenants.map(t => {
+      const activeLease = leases.find(l => l.tenant.id === t.id && ['ACTIVE', 'RENEWED'].includes(l.status)) || leases.find(l => l.tenant.id === t.id);
+      return {
+        ...t,
+        lease: activeLease || null
+      };
     });
   }
 
@@ -335,6 +365,33 @@ export class TenantsService {
     // Auto-verify the created document
     const verified = await this.verifyDocument(created.id, { verified: true });
     return verified;
+  }
+
+  async verifyAllTenantImages(
+    tenantId: string,
+    authenticatedUser?: any,
+  ): Promise<TenantDocument[]> {
+    const tenant = await this.tenantRepository.findOne({
+      where: { id: tenantId },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const results: TenantDocument[] = [];
+    const types = ['ID', 'CONTRACT', 'PROFILE'];
+
+    for (const type of types) {
+      try {
+        const doc = await this.createTenantDocumentFromTenantImage(
+          tenantId,
+          type,
+          authenticatedUser,
+        );
+        results.push(doc);
+      } catch (err) {
+        // ignore types that don't have images
+      }
+    }
+    return results;
   }
 
   async approveApplication(id: string): Promise<TenantApplication> {
@@ -646,25 +703,25 @@ export class TenantsService {
       target: announcement.target,
       site: announcement.site
         ? {
-            id: announcement.site.id,
-            name: announcement.site.name,
-            city: announcement.site.city,
-            subcity: announcement.site.subcity,
-          }
+          id: announcement.site.id,
+          name: announcement.site.name,
+          city: announcement.site.city,
+          subcity: announcement.site.subcity,
+        }
         : null,
       building: announcement.building
         ? {
-            id: announcement.building.id,
-            name: announcement.building.name,
-            code: announcement.building.code,
-          }
+          id: announcement.building.id,
+          name: announcement.building.name,
+          code: announcement.building.code,
+        }
         : null,
       created_by: announcement.created_by
         ? {
-            id: announcement.created_by.id,
-            name: announcement.created_by.name,
-            email: announcement.created_by.email,
-          }
+          id: announcement.created_by.id,
+          name: announcement.created_by.name,
+          email: announcement.created_by.email,
+        }
         : null,
       created_at: announcement.created_at,
     }));
