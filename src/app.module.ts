@@ -35,6 +35,9 @@ import { UserRole } from './modules/roles/entities/user-role.entity';
 import { ReportsModule } from './modules/reports/reports.module';
 import { InspectionsModule } from './modules/inspections/inspections.module';
 import { AssetsModule } from './modules/assets/assets.module';
+import { ManagementModule } from './modules/management/management.module';
+import { CommissionModule } from './modules/commission/commission.module';
+import { TendersModule } from './modules/tenders/tenders.module';
 
 @Module({
   imports: [
@@ -86,6 +89,9 @@ import { AssetsModule } from './modules/assets/assets.module';
     AutomationsModule,
     InspectionsModule,
     AssetsModule,
+    ManagementModule,
+    CommissionModule,
+    TendersModule,
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 100, // 100 requests per minute

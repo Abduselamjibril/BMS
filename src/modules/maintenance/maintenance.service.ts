@@ -20,8 +20,12 @@ import { MaintenanceSchedule } from './entities/maintenance-schedule.entity';
 import { CreateMaintenanceScheduleDto } from './dto/create-maintenance-schedule.dto';
 import { UserBuilding } from '../users/entities/user-building.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
+import { User } from '../users/entities/user.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Expense } from '../finance/entities/expense.entity';
+import { ManagementAssignment, ManagementScope } from '../management/entities/management-assignment.entity';
+import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
+import { CommissionBasis } from '../commission/entities/commission-rule.entity';
 
 @Injectable()
 export class MaintenanceService {
@@ -45,6 +49,7 @@ export class MaintenanceService {
     @InjectRepository(Expense)
     private readonly expenseRepo: Repository<Expense>,
     private readonly notificationsService: NotificationsService,
+    private readonly commissionCalculationService: CommissionCalculationService,
   ) { }
 
   private getSlaAcknowledgmentHours(priority: string): number {
@@ -118,22 +123,57 @@ export class MaintenanceService {
     }
 
     if (roleNames.includes('nominee_admin')) {
+      const buildingIds: string[] = [];
+      const unitIds: string[] = [];
+
+      // 1. Existing UserBuilding check (Legacy)
       const assignments = await this.userBuildingRepo.find({
         where: { user: { id: currentUserId } },
         relations: ['building'],
       });
-      if (!assignments.length) return [];
-      const buildingIds = assignments.map((a) => a.building.id);
-      return this.requestRepo
+      assignments.forEach((a) => buildingIds.push(a.building.id));
+
+      // 2. New ManagementAssignment check (Scoped)
+      const user = await this.requestRepo.manager.getRepository(User).findOne({
+        where: { id: currentUserId },
+      });
+
+      if (user?.company_id) {
+        const mgmtAssignments = await this.requestRepo.manager.getRepository(ManagementAssignment).find({
+          where: { company_id: user.company_id, is_active: true },
+        });
+
+        for (const ma of mgmtAssignments) {
+          if (ma.scope_type === ManagementScope.BUILDING && ma.building_id) {
+            buildingIds.push(ma.building_id);
+          } else if (ma.scope_type === ManagementScope.UNIT && ma.unit_id) {
+            unitIds.push(ma.unit_id);
+          }
+        }
+      }
+
+      const qb = this.requestRepo
         .createQueryBuilder('request')
         .leftJoinAndSelect('request.tenant', 'tenant')
         .leftJoinAndSelect('tenant.user', 'user')
         .leftJoinAndSelect('request.unit', 'unit')
         .leftJoinAndSelect('request.workOrders', 'workOrders')
         .leftJoinAndSelect('workOrders.contractor', 'contractor')
-        .leftJoinAndSelect('request.feedbacks', 'feedbacks')
-        .where('unit.building_id IN (:...buildingIds)', { buildingIds })
-        .getMany();
+        .leftJoinAndSelect('request.feedbacks', 'feedbacks');
+
+      if (buildingIds.length > 0 || unitIds.length > 0) {
+        if (buildingIds.length > 0 && unitIds.length > 0) {
+          qb.where('(unit.building_id IN (:...bids) OR unit.id IN (:...uids))', { bids: [...new Set(buildingIds)], uids: [...new Set(unitIds)] });
+        } else if (buildingIds.length > 0) {
+          qb.where('unit.building_id IN (:...bids)', { bids: [...new Set(buildingIds)] });
+        } else {
+          qb.where('unit.id IN (:...uids)', { uids: [...new Set(unitIds)] });
+        }
+      } else {
+        return [];
+      }
+
+      return qb.getMany();
     }
 
     if (roleNames.includes('tenant')) {
@@ -250,6 +290,19 @@ export class MaintenanceService {
     // Sync status with maintenance request
     if (workOrder.request) {
       await this.requestRepo.update(workOrder.request.id, { status: status.toUpperCase() as any });
+
+      // --- COMMISSION HOOK ---
+      // If the request is managed by a company and is completed, trigger maintenance commission calculation
+      if (status === 'completed' && actualCost && workOrder.request.managed_by_company_id) {
+        await this.commissionCalculationService.calculateFromSource(
+          CommissionBasis.MAINTENANCE,
+          workOrder.id,
+          actualCost,
+          workOrder.request.managed_by_company_id,
+          workOrder.request.unit?.building_id,
+        );
+      }
+      // -----------------------
     }
 
     // Status-based notifications

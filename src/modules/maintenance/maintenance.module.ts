@@ -14,6 +14,7 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Expense } from '../finance/entities/expense.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CommissionModule } from '../commission/commission.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Expense,
     ]),
     NotificationsModule,
+    CommissionModule,
   ],
   providers: [MaintenanceService],
   exports: [MaintenanceService],

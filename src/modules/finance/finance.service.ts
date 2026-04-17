@@ -24,10 +24,14 @@ import { OrganizationSettings } from '../settings/entities/organization-settings
 import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { UserBuilding } from '../users/entities/user-building.entity';
+import { User } from '../users/entities/user.entity';
+import { ManagementAssignment, ManagementScope } from '../management/entities/management-assignment.entity';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 
 import { FinancePdfService } from './services/finance-pdf.service';
+import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
+import { CommissionBasis } from '../commission/entities/commission-rule.entity';
 
 @Injectable()
 export class FinanceService {
@@ -57,6 +61,7 @@ export class FinanceService {
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
     private readonly financePdfService: FinancePdfService,
+    private readonly commissionCalculationService: CommissionCalculationService,
   ) {}
 
   /**
@@ -124,15 +129,47 @@ export class FinanceService {
         if (!tenant) return [];
         qb.andWhere('tenant.id = :tid', { tid: tenant.id });
       } else if (roleNames.includes('nominee_admin')) {
+        const buildingIds: string[] = [];
+        const unitIds: string[] = [];
+
+        // 1. Existing UserBuilding check (Legacy)
         const assignments = await this.dataSource
           .getRepository(UserBuilding)
           .find({
             where: { user: { id: currentUserId } },
             relations: ['building'],
           });
-        const bids = assignments.map((a) => a.building.id);
-        if (bids.length > 0) {
-          qb.andWhere('unit.buildingId IN (:...bids)', { bids });
+        assignments.forEach(a => buildingIds.push(a.building.id));
+
+        // 2. New ManagementAssignment check (Scoped)
+        const user = await this.dataSource.getRepository(User).findOne({
+          where: { id: currentUserId },
+        });
+
+        if (user?.company_id) {
+          const mgmtAssignments = await this.dataSource
+            .getRepository(ManagementAssignment)
+            .find({
+              where: { company_id: user.company_id, is_active: true },
+            });
+          
+          for (const ma of mgmtAssignments) {
+            if (ma.scope_type === ManagementScope.BUILDING && ma.building_id) {
+              buildingIds.push(ma.building_id);
+            } else if (ma.scope_type === ManagementScope.UNIT && ma.unit_id) {
+              unitIds.push(ma.unit_id);
+            }
+          }
+        }
+
+        if (buildingIds.length > 0 || unitIds.length > 0) {
+          if (buildingIds.length > 0 && unitIds.length > 0) {
+            qb.andWhere('(unit.buildingId IN (:...bids) OR unit.id IN (:...uids))', { bids: [...new Set(buildingIds)], uids: [...new Set(unitIds)] });
+          } else if (buildingIds.length > 0) {
+            qb.andWhere('unit.buildingId IN (:...bids)', { bids: [...new Set(buildingIds)] });
+          } else {
+            qb.andWhere('unit.id IN (:...uids)', { uids: [...new Set(unitIds)] });
+          }
         } else {
           return [];
         }
@@ -412,6 +449,19 @@ export class FinanceService {
       }
       
       await this.invoiceRepo.save(invoice);
+
+      // --- COMMISSION HOOK ---
+      // Trigger commission calculation for the building/unit
+      if (invoice.lease) {
+        await this.commissionCalculationService.calculateFromSource(
+          CommissionBasis.RENT,
+          payment.id,
+          Number(payment.amount),
+          invoice.lease.managed_by_company_id || undefined,
+          invoice.lease.building_id,
+        );
+      }
+      // -----------------------
 
       // Handle Overpayment -> Advance Balance
       if (overpayment > 0 && invoice.lease) {

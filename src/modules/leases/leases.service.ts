@@ -28,9 +28,13 @@ import { TerminateLeaseDto } from './dto/terminate-lease.dto';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 // RoleName enum removed
 import { UserRole } from '../roles/entities/user-role.entity';
+import { User } from '../users/entities/user.entity';
+import { ManagementAssignment, ManagementScope } from '../management/entities/management-assignment.entity';
 import { LeasePdfService } from './services/lease-pdf.service';
 import { FinanceService } from '../finance/finance.service';
 import { InvoiceItemType } from '../finance/entities/invoice-item.entity';
+import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
+import { CommissionBasis } from '../commission/entities/commission-rule.entity';
 
 @Injectable()
 export class LeasesService {
@@ -60,6 +64,7 @@ export class LeasesService {
 
     @Inject(forwardRef(() => FinanceService))
     private readonly financeService: FinanceService,
+    private readonly commissionCalculationService: CommissionCalculationService,
   ) { }
 
 
@@ -197,15 +202,50 @@ export class LeasesService {
     if (isSuperAdmin) {
       // no-op
     }
-    // 2. Nominee Admin: Filter by assigned buildings
+    // 2. Nominee Admin: Filter by assigned buildings/units
     else if (isNominee) {
+      const buildingIds: string[] = [];
+      const unitIds: string[] = [];
+
+      // Legacy assignments
       const assignments = await this.buildingAssignmentRepository.find({
         where: { user: { id: currentUserId } },
         relations: ['building'],
       });
-      const buildingIds = assignments.map((item) => item.building.id);
-      if (buildingIds.length === 0) return [];
-      query.andWhere('lease.building_id IN (:...buildingIds)', { buildingIds });
+      assignments.forEach((item) => buildingIds.push(item.building.id));
+
+      // Management Company assignments
+      const user = await this.dataSource.getRepository(User).findOne({
+        where: { id: currentUserId },
+      });
+
+      if (user?.company_id) {
+        const mgmtAssignments = await this.dataSource
+          .getRepository(ManagementAssignment)
+          .find({
+            where: { company_id: user.company_id, is_active: true },
+          });
+        
+        for (const ma of mgmtAssignments) {
+          if (ma.scope_type === ManagementScope.BUILDING && ma.building_id) {
+            buildingIds.push(ma.building_id);
+          } else if (ma.scope_type === ManagementScope.UNIT && ma.unit_id) {
+            unitIds.push(ma.unit_id);
+          }
+        }
+      }
+
+      if (buildingIds.length > 0 || unitIds.length > 0) {
+        if (buildingIds.length > 0 && unitIds.length > 0) {
+          query.andWhere('(lease.building_id IN (:...buildingIds) OR lease.unit_id IN (:...unitIds))', { buildingIds: [...new Set(buildingIds)], unitIds: [...new Set(unitIds)] });
+        } else if (buildingIds.length > 0) {
+          query.andWhere('lease.building_id IN (:...buildingIds)', { buildingIds: [...new Set(buildingIds)] });
+        } else {
+          query.andWhere('lease.unit_id IN (:...unitIds)', { unitIds: [...new Set(unitIds)] });
+        }
+      } else {
+        return [];
+      }
     }
     // 3. Tenant: Filter by their own tenant record
     else if (isTenant) {
@@ -309,6 +349,19 @@ export class LeasesService {
         status: OccupancyStatus.CURRENT,
       });
       await manager.getRepository(UnitOccupancyHistory).save(occupancy);
+
+      // --- COMMISSION HOOK ---
+      // Trigger commission for lease signing if managed by a company
+      if (lease.managed_by_company_id) {
+        await this.commissionCalculationService.calculateFromSource(
+          CommissionBasis.LEASE,
+          lease.id,
+          Number(lease.rent_amount),
+          lease.managed_by_company_id,
+          lease.building_id,
+        );
+      }
+      // -----------------------
     });
 
     return this.leaseRepository.findOne({

@@ -15,6 +15,7 @@ import { LeasesScheduler } from './leases.scheduler';
 import { LeasePdfService } from './services/lease-pdf.service';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 import { FinanceModule } from '../finance/finance.module';
+import { CommissionModule } from '../commission/commission.module';
 import { forwardRef } from '@nestjs/common';
 
 @Module({
@@ -32,6 +33,7 @@ import { forwardRef } from '@nestjs/common';
       OrganizationSettings,
     ]),
     forwardRef(() => FinanceModule),
+    CommissionModule,
   ],
   controllers: [LeasesController],
   providers: [LeasesService, LeasesScheduler, LeasePdfService],

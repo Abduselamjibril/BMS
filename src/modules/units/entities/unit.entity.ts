@@ -5,6 +5,7 @@ import {
   ManyToOne,
   OneToMany,
   Index,
+  JoinColumn,
 } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { UnitAmenity } from '../../amenities/entities/unit-amenity.entity';
@@ -32,7 +33,11 @@ export class Unit {
   id!: string;
 
   @ManyToOne(() => Building, (building) => building.units, { nullable: false })
+  @JoinColumn({ name: 'building_id' })
   building!: Building;
+
+  @Column({ nullable: true })
+  building_id!: string;
 
   @Column()
   unit_number!: string;

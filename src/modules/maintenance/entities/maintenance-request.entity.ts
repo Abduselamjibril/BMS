@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  JoinColumn,
   OneToMany,
   CreateDateColumn,
 } from 'typeorm';
@@ -10,6 +11,7 @@ import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { WorkOrder } from './contractor-and-workorder.entity';
 import { MaintenanceFeedback } from './maintenance-feedback.entity';
+import { ManagementCompany } from '../../management/entities/management-company.entity';
 
 export enum MaintenanceStatus {
   SUBMITTED = 'SUBMITTED',
@@ -62,4 +64,11 @@ export class MaintenanceRequest {
 
   @CreateDateColumn()
   created_at!: Date;
+
+  @ManyToOne(() => ManagementCompany, { nullable: true })
+  @JoinColumn({ name: 'managed_by_company_id' })
+  managed_by_company?: ManagementCompany;
+
+  @Column({ nullable: true })
+  managed_by_company_id?: string;
 }

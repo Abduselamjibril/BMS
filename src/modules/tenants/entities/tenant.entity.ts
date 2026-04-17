@@ -6,10 +6,13 @@ import {
   OneToOne,
   PrimaryGeneratedColumn,
   JoinColumn,
+  ManyToOne,
+  UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { TenantApplication } from './tenant-application.entity';
 import { TenantDocument } from './tenant-document.entity';
+import { ManagementCompany } from '../../management/entities/management-company.entity';
 
 export enum TenantStatus {
   ACTIVE = 'active',
@@ -74,4 +77,11 @@ export class Tenant {
 
   @OneToMany(() => TenantDocument, (document) => document.tenant)
   documents!: TenantDocument[];
+
+  @ManyToOne(() => ManagementCompany, { nullable: true })
+  @JoinColumn({ name: 'managed_by_company_id' })
+  managed_by_company?: ManagementCompany;
+
+  @Column({ nullable: true })
+  managed_by_company_id?: string;
 }

@@ -10,6 +10,7 @@ import {
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
 import { Building } from '../../buildings/entities/building.entity';
+import { ManagementCompany } from '../../management/entities/management-company.entity';
 
 export enum DepositStatus {
   HELD = 'HELD',
@@ -51,6 +52,9 @@ export class Lease {
   @ManyToOne(() => Building, { nullable: false })
   @JoinColumn({ name: 'building_id' })
   building!: Building;
+
+  @Column({ nullable: true })
+  building_id!: string;
 
   @Column({ type: 'date' })
   start_date!: string;
@@ -106,4 +110,11 @@ export class Lease {
 
   @UpdateDateColumn()
   updated_at!: Date;
+
+  @ManyToOne(() => ManagementCompany, { nullable: true })
+  @JoinColumn({ name: 'managed_by_company_id' })
+  managed_by_company?: ManagementCompany;
+
+  @Column({ nullable: true })
+  managed_by_company_id?: string;
 }

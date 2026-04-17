@@ -4,9 +4,12 @@ import {
   Column,
   CreateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { UserRole } from '../../roles/entities/user-role.entity';
 import { LoginHistory } from './login-history.entity';
+import { ManagementCompany } from '../../management/entities/management-company.entity';
 
 export enum UserStatus {
   ACTIVE = 'ACTIVE',
@@ -45,4 +48,11 @@ export class User {
 
   @OneToMany(() => LoginHistory, (loginHistory) => loginHistory.user)
   loginHistory!: LoginHistory[];
+
+  @ManyToOne(() => ManagementCompany, { nullable: true })
+  @JoinColumn({ name: 'company_id' })
+  company?: ManagementCompany;
+
+  @Column({ nullable: true })
+  company_id?: string;
 }
