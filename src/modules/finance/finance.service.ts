@@ -707,14 +707,14 @@ export class FinanceService {
     const qb = this.paymentRepo.createQueryBuilder('p')
       .innerJoin('p.invoice', 'inv')
       .innerJoin('inv.unit', 'u')
-      .select('u.buildingId', 'building_id')
+      .select('u.building_id', 'building_id')
       .addSelect('SUM(p.amount)', 'total_revenue')
       .where('p.status = :status', { status: 'confirmed' });
 
-    if (params.building_id) qb.andWhere('u.buildingId = :bid', { bid: params.building_id });
-    if (params.month) qb.andWhere('EXTRACT(MONTH FROM "p"."created_at") = :m', { m: params.month });
+    if (params.building_id) qb.andWhere('u.building_id = :bid', { bid: params.building_id });
+    if (params.month) qb.andWhere('EXTRACT(MONTH FROM p.created_at) = :m', { m: params.month });
     
-    return qb.groupBy('u.buildingId').getRawMany();
+    return qb.groupBy('u.building_id').getRawMany();
   }
 
   // --- Expenses ---
@@ -784,9 +784,9 @@ export class FinanceService {
       .select('SUM(p.amount)', 'total')
       .where('p.status = :s', { s: 'confirmed' });
     
-    if (params.building_id) revQb.andWhere('u.buildingId = :bid', { bid: params.building_id });
-    if (params.year) revQb.andWhere('EXTRACT(YEAR FROM "p"."created_at") = :y', { y: params.year });
-    if (params.month) revQb.andWhere('EXTRACT(MONTH FROM "p"."created_at") = :m', { m: params.month });
+    if (params.building_id) revQb.andWhere('u.building_id = :bid', { bid: params.building_id });
+    if (params.year) revQb.andWhere('EXTRACT(YEAR FROM p.created_at) = :y', { y: params.year });
+    if (params.month) revQb.andWhere('EXTRACT(MONTH FROM p.created_at) = :m', { m: params.month });
 
     const revRes = await revQb.getRawOne();
     const totalRevenue = Number(revRes?.total || 0);
@@ -1051,10 +1051,10 @@ export class FinanceService {
     const buildingArrears = await this.invoiceRepo
       .createQueryBuilder('inv')
       .leftJoin('inv.unit', 'u')
-      .select('u."buildingId"', 'building_id')
+      .select('u.building_id', 'building_id')
       .addSelect('SUM(inv.total_amount - inv.amount_paid)', 'outstanding')
       .where('inv.status IN (:...statuses)', { statuses: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE] })
-      .groupBy('u."buildingId"')
+      .groupBy('u.building_id')
       .getRawMany();
 
     return {

@@ -106,6 +106,87 @@ export class ReportsController {
     return this.reportsService.getUtilityAnomalies();
   }
 
+  @Get('people')
+  @ApiOperation({ summary: 'Tenant and visitor report' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async peopleReport() {
+    return this.reportsService.getPeopleReport();
+  }
+
+  @Get('leases')
+  @ApiOperation({ summary: 'Detailed lease report' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async leaseReport() {
+    return this.reportsService.getLeaseReport();
+  }
+
+  @Get('properties')
+  @ApiOperation({ summary: 'Building-wise property report' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async propertyReport() {
+    return this.reportsService.getPropertyReport();
+  }
+
+  @Get('overdue-details')
+  @ApiOperation({ summary: 'Detailed delay fee and eviction report' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:financial')
+  async overdueDetails() {
+    return this.reportsService.getOverduePenaltyReport();
+  }
+
+  @Get('detailed-financials')
+  @ApiOperation({ summary: 'Recent financial transactions report' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:financial')
+  async detailedFinancials() {
+    return this.reportsService.getDetailedFinancials();
+  }
+
+  @Get('finance-analytics')
+  @ApiOperation({ summary: 'Advanced financial visual analytics' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:financial')
+  async financeAnalytics() {
+    return this.reportsService.getFinanceAnalytics();
+  }
+
+  @Get('property-analytics')
+  @ApiOperation({ summary: 'Advanced property visual analytics' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async propertyAnalytics() {
+    return this.reportsService.getPropertyAnalytics();
+  }
+
+  @Get('lease-analytics')
+  @ApiOperation({ summary: 'Advanced lease visual analytics' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async leaseAnalytics() {
+    return this.reportsService.getLeaseAnalytics();
+  }
+
+  @Get('people-analytics')
+  @ApiOperation({ summary: 'Advanced people/visitor visual analytics' })
+  @Roles('super_admin', 'company_admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Permissions('reports:occupancy')
+  async peopleAnalytics() {
+    return this.reportsService.getPeopleAnalytics();
+  }
+
   @Get('export')
   @ApiOperation({ summary: 'Export reports to CSV' })
   @Roles('super_admin', 'company_admin')
