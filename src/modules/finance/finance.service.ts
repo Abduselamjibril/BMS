@@ -14,6 +14,7 @@ import { InvoiceItem, InvoiceItemType } from './entities/invoice-item.entity';
 import { Payment, PaymentStatus } from './entities/payment.entity';
 import { DepositAdvice } from './entities/deposit-advice.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { CreateDepositAdviceDto } from './dto/create-deposit-advice.dto';
@@ -131,7 +132,7 @@ export class FinanceService {
           });
         const bids = assignments.map((a) => a.building.id);
         if (bids.length > 0) {
-          qb.andWhere('unit.building_id IN (:...bids)', { bids });
+          qb.andWhere('unit.buildingId IN (:...bids)', { bids });
         } else {
           return [];
         }
@@ -139,7 +140,7 @@ export class FinanceService {
     }
 
     if (building_id) {
-      qb.andWhere('unit.building_id = :building_id', { building_id });
+      qb.andWhere('unit.buildingId = :building_id', { building_id });
     }
 
     if (status) {
@@ -184,11 +185,22 @@ export class FinanceService {
       subtotal,
       tax_amount,
       total_amount,
-      status: InvoiceStatus.PENDING,
+      status: (dto.status as InvoiceStatus) || InvoiceStatus.PENDING,
       invoice_no: await this.generateInvoiceNumber(),
     });
 
     const savedInvoice = await this.invoiceRepo.save(invoice);
+
+    // If initial status is PENDING, notify immediately
+    if (savedInvoice.status === InvoiceStatus.PENDING && savedInvoice.tenant) {
+      await this.notificationsService.notify(
+        savedInvoice.tenant.id,
+        'New Invoice Issued',
+        `Your invoice ${savedInvoice.invoice_no} has been issued. Amount: ${savedInvoice.total_amount} ETB`,
+        NotificationType.FINANCE,
+        { invoiceId: savedInvoice.id },
+      );
+    }
     let totalSettled = 0;
     let currentAdvance = Number(lease.advance_balance || 0);
 
@@ -241,8 +253,90 @@ export class FinanceService {
     }
 
     return savedInvoice;
+  }
 
-    return savedInvoice;
+  async updateDraftInvoice(id: string, dto: UpdateInvoiceDto) {
+    const invoice = await this.invoiceRepo.findOne({
+      where: { id },
+      relations: ['items'],
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status !== InvoiceStatus.DRAFT) {
+      throw new BadRequestException('Only draft invoices can be edited');
+    }
+
+    const settings = await this.settingsRepo.findOne({ where: {} });
+    if (!settings) {
+      throw new BadRequestException('Organization settings not found.');
+    }
+    const vatRate = Number(settings.vat_rate);
+
+    // Remove old items
+    await this.invoiceItemRepo.delete({ invoice: { id } });
+
+    // Calculate new totals
+    const subtotal = dto.items.reduce((sum, item) => sum + item.amount, 0);
+    const tax_amount = subtotal * vatRate;
+    const total_amount = subtotal + tax_amount;
+
+    invoice.due_date = dto.due_date;
+    invoice.subtotal = subtotal;
+    invoice.tax_amount = tax_amount;
+    invoice.total_amount = total_amount;
+
+    const updatedInvoice = await this.invoiceRepo.save(invoice);
+
+    // Save new items
+    for (const item of dto.items) {
+      await this.invoiceItemRepo.save(
+        this.invoiceItemRepo.create({
+          invoice: updatedInvoice,
+          type: item.type,
+          amount: item.amount,
+          description: item.description,
+        }),
+      );
+    }
+
+    return this.invoiceRepo.findOne({ where: { id }, relations: ['items'] });
+  }
+
+  async confirmInvoice(id: string) {
+    const invoice = await this.invoiceRepo.findOne({
+      where: { id },
+      relations: ['tenant'],
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status !== InvoiceStatus.DRAFT) {
+      throw new BadRequestException('Only draft invoices can be approved');
+    }
+
+    invoice.status = InvoiceStatus.PENDING;
+    const saved = await this.invoiceRepo.save(invoice);
+
+    if (saved.tenant) {
+      await this.notificationsService.notify(
+        saved.tenant.id,
+        'Invoice Approved',
+        `Your invoice ${saved.invoice_no} has been approved and issued. Amount: ${saved.total_amount} ETB`,
+        NotificationType.FINANCE,
+        { invoiceId: saved.id },
+      );
+    }
+    return saved;
+  }
+
+  async bulkConfirmInvoices(ids: string[]) {
+    const results: any[] = [];
+    for (const id of ids) {
+      try {
+        const res = await this.confirmInvoice(id);
+        results.push(res);
+      } catch (e) {
+        console.error(`Bulk Confirm: Failed for ${id}`, e.message);
+      }
+    }
+    return { approved: results.length, total: ids.length };
   }
 
   async voidInvoice(id: string) {
@@ -396,10 +490,11 @@ export class FinanceService {
       .where('lease.status = :status', { status: 'active' });
 
     if (site_id) {
-      qb.andWhere('unit.site_id = :site_id', { site_id });
+      qb.leftJoin('unit.building', 'building');
+      qb.andWhere('building.siteId = :site_id', { site_id });
     }
     if (building_id) {
-      qb.andWhere('unit.building_id = :building_id', { building_id });
+      qb.andWhere('unit.buildingId = :building_id', { building_id });
     }
     return qb.getMany();
   }
@@ -523,12 +618,13 @@ export class FinanceService {
     const lateFeeType = settings.late_fee_type || 'PERCENTAGE';
     const lateFeePct = Number(settings.late_fee_percentage || 2.0);
     const lateFeeFlat = Number(settings.late_fee_flat_amount || 0.0);
+    const lateFeeGraceDays = Number(settings.late_fee_grace_period_days || 0);
 
     const todayObj = referenceDate ? new Date(referenceDate) : new Date();
     const dueDateObj = new Date(invoice.due_date);
     const daysOverdue = Math.floor((todayObj.getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (daysOverdue <= 0) return false;
+    if (daysOverdue <= lateFeeGraceDays) return false;
 
     const balanceRemaining = Number(invoice.total_amount) - Number(invoice.amount_paid);
     if (balanceRemaining <= 0) return false;
@@ -540,7 +636,7 @@ export class FinanceService {
       dailyFee = lateFeeFlat; // Flat amount per day
     }
     
-    const totalLateFee = dailyFee * daysOverdue;
+    const totalLateFee = dailyFee * (daysOverdue - lateFeeGraceDays);
     
     if (totalLateFee > Number(invoice.late_fee_amount)) {
       invoice.late_fee_amount = totalLateFee;

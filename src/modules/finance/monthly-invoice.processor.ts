@@ -27,6 +27,7 @@ export class MonthlyInvoiceProcessor {
           tenant_id: lease.tenant?.id || (lease as any).tenant_id,
           unit_id: lease.unit?.id || (lease as any).unit_id,
           due_date: new Date().toISOString().split('T')[0],
+          status: 'draft',
           items: [
             {
               type: 'RENT',

@@ -45,4 +45,7 @@ export class OrganizationSettings {
 
   @Column({ type: 'int', default: 12 })
   default_lease_duration_months!: number;
+
+  @Column({ type: 'int', default: 0 })
+  late_fee_grace_period_days!: number;
 }

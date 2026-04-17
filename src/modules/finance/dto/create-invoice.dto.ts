@@ -47,4 +47,8 @@ export class CreateInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => CreateInvoiceItemDto)
   items!: CreateInvoiceItemDto[];
+
+  @ApiProperty({ required: false })
+  @IsString()
+  status?: string;
 }

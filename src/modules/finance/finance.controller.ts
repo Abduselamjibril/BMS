@@ -26,6 +26,7 @@ import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
 import { PatchTaxRulesDto } from './dto/patch-tax-rules.dto';
 import { GenerateInvoicesDto } from './dto/generate-invoices.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -150,6 +151,27 @@ export class FinanceController {
   @ApiBody({ type: PatchTaxRulesDto })
   async patchTaxRules(@Body() dto: PatchTaxRulesDto) {
     return this.financeService.updateTaxRules(dto);
+  }
+
+  @Patch('invoices/:id/confirm')
+  @Permissions('finance:invoices:manage')
+  @ApiOperation({ summary: 'Approve a draft invoice' })
+  async confirmInvoice(@Param('id') id: string) {
+    return this.financeService.confirmInvoice(id);
+  }
+
+  @Patch('invoices/:id/draft')
+  @Permissions('finance:invoices:manage')
+  @ApiOperation({ summary: 'Update a draft invoice' })
+  async updateDraftInvoice(@Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
+    return this.financeService.updateDraftInvoice(id, dto);
+  }
+
+  @Post('invoices/bulk-confirm')
+  @Permissions('finance:invoices:manage')
+  @ApiOperation({ summary: 'Approve multiple draft invoices' })
+  async bulkConfirm(@Body() dto: { ids: string[] }) {
+    return this.financeService.bulkConfirmInvoices(dto.ids);
   }
 
   @Delete('invoices/:id')
