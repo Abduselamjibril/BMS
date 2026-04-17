@@ -125,11 +125,14 @@ export class ReportsService {
   async dashboard() {
     // Occupancy rate
     const totalUnits = await this.unitRepo.count();
+    const occupiedUnits = await this.unitRepo.count({
+      where: { status: UnitStatus.OCCUPIED },
+    });
     const occupiedLeases = await this.leaseRepo.count({
       where: { status: LeaseStatus.ACTIVE },
     });
     const occupancy =
-      totalUnits === 0 ? 0 : (occupiedLeases / totalUnits) * 100;
+      totalUnits === 0 ? 0 : (occupiedUnits / totalUnits) * 100;
 
     // Revenue: sum of paid payments
     const revenueResult = await this.paymentRepo
@@ -151,6 +154,7 @@ export class ReportsService {
     return {
       occupancy_rate: occupancy,
       total_units: totalUnits,
+      occupied_units: occupiedUnits,
       occupied_leases: occupiedLeases,
       total_revenue: totalRevenue,
       maintenance: maintenanceKpis,
@@ -175,9 +179,11 @@ export class ReportsService {
 
   async occupancyInsights() {
     // Vacant units and leases expiring soon
-    const vacant = await this.unitRepo.count({
-      where: { status: 'vacant' } as any,
+    const totalUnits = await this.unitRepo.count();
+    const occupiedUnits = await this.unitRepo.count({
+      where: { status: UnitStatus.OCCUPIED },
     });
+    const vacant = totalUnits - occupiedUnits;
     const expiring = await this.leaseRepo
       .createQueryBuilder('l')
       .where('l.end_date BETWEEN :start AND :end', {
