@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
+import { Building } from '../../buildings/entities/building.entity';
 import { WorkOrder } from './contractor-and-workorder.entity';
 import { MaintenanceFeedback } from './maintenance-feedback.entity';
 import { ManagementCompany } from '../../management/entities/management-company.entity';
@@ -28,11 +29,14 @@ export class MaintenanceRequest {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Tenant, { nullable: false })
-  tenant!: Tenant;
+  @ManyToOne(() => Tenant, { nullable: true })
+  tenant?: Tenant;
 
   @ManyToOne(() => Unit, { nullable: true })
   unit?: Unit;
+
+  @ManyToOne(() => Building, { nullable: true })
+  building?: Building;
 
   @Column({ length: 50 })
   category!: string; // e.g. plumbing, electric

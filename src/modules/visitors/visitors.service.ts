@@ -123,19 +123,29 @@ export class VisitorsService {
     const userId = authenticatedUser.id || authenticatedUser.sub;
     const roles = await this.getUserRoles(userId);
 
-    if (roles.includes('super_admin')) {
+    if (roles.includes('super_admin') || roles.includes('admin')) {
       return this.visitorRepo.find(
         siteId ? { where: { site_id: siteId } } : {},
       );
     }
 
-    if (roles.includes('nominee_admin')) {
-      const buildingIds = await this.getUserBuildingIds(userId);
+    if (roles.includes('site_admin') || roles.includes('nominee_admin')) {
+      const assignments = await this.adminAssignmentRepo.find({
+        where: { user: { id: userId } },
+        relations: ['building', 'building.site'],
+      });
+      const buildingIds = assignments.map((a) => a.building.id);
+      const siteIds = assignments
+        .map((a) => (a.building.site as any)?.id)
+        .filter((id) => !!id);
+
       return this.visitorRepo
         .createQueryBuilder('visitor')
-        .leftJoin(Unit, 'unit', 'unit.id = visitor.unit_id')
-        .where('unit.building_id IN (:...buildingIds)', {
-          buildingIds: buildingIds.length ? buildingIds : ['none'],
+        .where('visitor.site_id::uuid IN (:...siteIds)', {
+          siteIds: siteIds.length ? siteIds : [ '00000000-0000-0000-0000-000000000000' ],
+        })
+        .orWhere('visitor.unit_id::uuid IN (SELECT u.id FROM units u WHERE u.building_id IN (:...buildingIds))', {
+          buildingIds: buildingIds.length ? buildingIds : [ '00000000-0000-0000-0000-000000000000' ],
         })
         .orWhere('visitor.host_user_id = :userId', { userId })
         .getMany();
@@ -164,7 +174,7 @@ export class VisitorsService {
     if (authenticatedUser) {
       const userId = authenticatedUser.id || authenticatedUser.sub;
       const roles = await this.getUserRoles(userId);
-      if (roles.includes('super_admin')) return v;
+      if (roles.includes('super_admin') || roles.includes('admin')) return v;
 
       if (roles.includes('tenant')) {
         const tenant = await this.tenantRepo.findOne({
@@ -176,9 +186,9 @@ export class VisitorsService {
         }
       }
 
-      if (roles.includes('nominee_admin')) {
+      if (roles.includes('site_admin') || roles.includes('nominee_admin')) {
         const buildingIds = await this.getUserBuildingIds(userId);
-        // Additional check for nominee admin can be added here
+        // Additional check for site/nominee admin can be added here
       }
     }
     return v;

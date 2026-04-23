@@ -138,7 +138,8 @@ export class UtilityService {
       });
     } else if (roles.includes('tenant')) {
       const tenant = await this.tenantRepo.findOne({ where: { user: { id: userId } } });
-      const unitIds = await this.getTenantUnitIds(tenant?.id || '');
+      if (!tenant) return [];
+      const unitIds = await this.getTenantUnitIds(tenant.id);
       // Restrict to units the tenant has active leases for
       qb.andWhere('meter.unit_id::text IN (:...unitIds)', {
         unitIds: unitIds.length ? unitIds : ['none'],
@@ -288,22 +289,22 @@ export class UtilityService {
 
     if (roles.includes('nominee_admin')) {
       const buildingIds = await this.getUserBuildingIds(userId);
+      if (buildingIds.length === 0) return [];
       return this.readingRepo
         .createQueryBuilder('reading')
         .innerJoin(UtilityMeter, 'meter', 'meter.id = reading.meter_id')
         .innerJoin(Unit, 'unit', 'unit.id = meter.unit_id')
-        .where('unit.building_id IN (:...buildingIds)', {
-          buildingIds: buildingIds.length ? buildingIds : ['none'],
-        })
+        .where('unit.building_id IN (:...buildingIds)', { buildingIds })
         .andWhere(meterId ? 'reading.meter_id = :meterId' : '1=1', { meterId })
         .getMany();
     }
 
     if (roles.includes('tenant')) {
       const meters = await this.findMeters(authenticatedUser);
+      if (meters.length === 0) return [];
       const meterIds = meters.map((m) => m.id);
       return this.readingRepo.find({
-        where: { meter_id: In(meterIds.length ? meterIds : ['none']) as any },
+        where: { meter_id: In(meterIds) },
       });
     }
 
@@ -327,6 +328,7 @@ export class UtilityService {
   }
 
   private async getTenantUnitIds(tenantId: string): Promise<string[]> {
+    if (!tenantId || tenantId === '') return [];
     const leases = await this.leaseRepo.find({
       where: { tenant: { id: tenantId }, status: LeaseStatus.ACTIVE },
       relations: ['unit'],

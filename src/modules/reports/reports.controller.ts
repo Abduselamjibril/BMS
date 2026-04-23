@@ -18,7 +18,7 @@ export class ReportsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Management dashboard KPIs' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
   async dashboard() {
@@ -27,7 +27,7 @@ export class ReportsController {
 
   @Get('financial')
   @ApiOperation({ summary: 'Monthly revenue trends' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async financial() {
@@ -36,7 +36,7 @@ export class ReportsController {
 
   @Get('occupancy')
   @ApiOperation({ summary: 'Occupancy insights and expiring leases' })
-  @Roles('super_admin', 'company_admin', 'nominee_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async occupancy() {
@@ -45,7 +45,7 @@ export class ReportsController {
 
   @Get('drilldown')
   @ApiOperation({ summary: 'Revenue drilldown by building' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:revenue')
   async drilldown() {
@@ -54,7 +54,7 @@ export class ReportsController {
 
   @Get('vacancy-trend')
   @ApiOperation({ summary: '12-month vacancy trend' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async vacancyTrend() {
@@ -63,7 +63,7 @@ export class ReportsController {
 
   @Get('overdue-aging')
   @ApiOperation({ summary: 'Overdue rent aging report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async overdueAging() {
@@ -72,7 +72,7 @@ export class ReportsController {
 
   @Get('maintenance-analytics')
   @ApiOperation({ summary: 'Maintenance cost trends' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:maintenance')
   async maintenanceAnalytics() {
@@ -81,7 +81,7 @@ export class ReportsController {
 
   @Get('turnover')
   @ApiOperation({ summary: 'Tenant turnover rate' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async turnover() {
@@ -90,7 +90,7 @@ export class ReportsController {
 
   @Get('tenancy-duration')
   @ApiOperation({ summary: 'Average tenancy duration' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async tenancyDuration() {
@@ -99,7 +99,7 @@ export class ReportsController {
 
   @Get('anomalies')
   @ApiOperation({ summary: 'Utility anomaly detection' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:utility')
   async anomalies() {
@@ -108,7 +108,7 @@ export class ReportsController {
 
   @Get('people')
   @ApiOperation({ summary: 'Tenant and visitor report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async peopleReport() {
@@ -117,7 +117,7 @@ export class ReportsController {
 
   @Get('leases')
   @ApiOperation({ summary: 'Detailed lease report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async leaseReport() {
@@ -126,7 +126,7 @@ export class ReportsController {
 
   @Get('properties')
   @ApiOperation({ summary: 'Building-wise property report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async propertyReport() {
@@ -135,7 +135,7 @@ export class ReportsController {
 
   @Get('overdue-details')
   @ApiOperation({ summary: 'Detailed delay fee and eviction report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async overdueDetails() {
@@ -144,7 +144,7 @@ export class ReportsController {
 
   @Get('detailed-financials')
   @ApiOperation({ summary: 'Recent financial transactions report' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async detailedFinancials() {
@@ -153,7 +153,7 @@ export class ReportsController {
 
   @Get('finance-analytics')
   @ApiOperation({ summary: 'Advanced financial visual analytics' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async financeAnalytics() {
@@ -162,7 +162,7 @@ export class ReportsController {
 
   @Get('property-analytics')
   @ApiOperation({ summary: 'Advanced property visual analytics' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async propertyAnalytics() {
@@ -171,7 +171,7 @@ export class ReportsController {
 
   @Get('lease-analytics')
   @ApiOperation({ summary: 'Advanced lease visual analytics' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async leaseAnalytics() {
@@ -180,7 +180,7 @@ export class ReportsController {
 
   @Get('people-analytics')
   @ApiOperation({ summary: 'Advanced people/visitor visual analytics' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
   async peopleAnalytics() {
@@ -189,7 +189,7 @@ export class ReportsController {
 
   @Get('export')
   @ApiOperation({ summary: 'Export reports to CSV' })
-  @Roles('super_admin', 'company_admin')
+  @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
   async export(@Query('type') type: string, @Res() res: Response) {

@@ -155,9 +155,10 @@ export class TenantsService {
       relations: ['role'],
     });
 
-    const isSuperAdmin = roles.some((role) => role.role.name === 'super_admin');
-    if (!isSuperAdmin) {
-      throw new ForbiddenException('Only super admins can view tenants');
+    const allowedRoles = ['super_admin', 'admin', 'site_admin', 'contractor', 'tenant', 'nominee_admin'];
+    const isAllowed = roles.some((role) => allowedRoles.includes(role.role.name));
+    if (!isAllowed) {
+      throw new ForbiddenException('Insufficient permissions to view tenants');
     }
 
     const tenants = await this.tenantRepository.find({

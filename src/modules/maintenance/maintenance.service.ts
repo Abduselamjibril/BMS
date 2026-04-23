@@ -208,7 +208,7 @@ export class MaintenanceService {
 
   async getWorkOrders() {
     return this.workOrderRepo.find({
-      relations: ['request', 'request.tenant', 'request.unit', 'contractor'],
+      relations: ['request', 'request.tenant', 'request.unit', 'request.building', 'contractor'],
       order: { created_at: 'DESC' },
     });
   }
@@ -517,8 +517,10 @@ export class MaintenanceService {
           priority: schedule.priority,
           description: `Auto-generated from schedule: ${schedule.name}. ${schedule.description || ''}`,
           status: MaintenanceStatus.SUBMITTED,
-          unit: undefined, // Building level
-        }) as unknown as MaintenanceRequest;
+          unit: undefined,
+          building: schedule.building,
+          tenant: undefined,
+        }) as MaintenanceRequest;
 
         // Calculate SLA Deadline (Acknowledgment)
         const hours = this.getSlaAcknowledgmentHours(request.priority);

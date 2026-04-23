@@ -116,6 +116,7 @@ async function bootstrap() {
     { code: 'qr:export_pdf', description: 'Export QR codes to PDF' },
     // Messaging
     { code: 'messages:send', description: 'Send messages to tenant' },
+    { code: 'tenants:read', description: 'Read tenant profiles' },
     // Units management
     { code: 'units:create', description: 'Create units' },
     { code: 'units:read', description: 'Read units' },
@@ -213,11 +214,11 @@ async function bootstrap() {
         'units:create','units:read','units:update','units:delete','units:bulk_upload','units:amenities_link','units:amenities_remove',
         'amenities:create','amenities:read','amenities:update','amenities:delete','amenities:link_building','amenities:remove_building','amenities:link_unit','amenities:remove_unit',
         'reports:view','reports:dashboard','reports:financial','reports:occupancy',
+        'reports:revenue','reports:maintenance','reports:utility',
         'maintenance:requests:create','maintenance:requests:read','maintenance:requests:update','maintenance:work_orders:create','maintenance:work_orders:update','maintenance:feedback:create','maintenance:reports:read',
         'qr:generate','qr:analytics','qr:deactivate','qr:export_pdf',
         'settings:read','settings:update',
         'assets:create', 'assets:read', 'assets:update', 'assets:delete',
-        // role/permission management (admin-level)
         'roles:read','roles:update','roles:assign_permissions','permissions:read'
       ];
       for (const code of adminPermCodes) {
@@ -231,11 +232,12 @@ async function bootstrap() {
     }
     if (siteAdminRole) {
       const sitePermCodes = [
-        'visitors:create','visitors:read','visitors:update','visitors:delete','reports:view',
+        'users:read',
+        'visitors:create','visitors:read','visitors:update','visitors:delete',
+        'reports:view','reports:dashboard','reports:financial','reports:occupancy','reports:revenue','reports:maintenance','reports:utility',
         'owners:read',
         'buildings:read',
         'sites:read','sites:update',
-        // limited read access to permissions
         'permissions:read'
       ];
       for (const code of sitePermCodes) {
@@ -252,7 +254,11 @@ async function bootstrap() {
     if (contractorRole) {
       const contractorPermCodes = [
         'maintenance:work_orders:update',
-        'maintenance:requests:read'
+        'maintenance:requests:read',
+        'tenants:read',
+        'units:read',
+        'buildings:read',
+        'sites:read'
       ];
       for (const code of contractorPermCodes) {
         const p = allPerms.find((x) => x.code === code);
@@ -272,6 +278,9 @@ async function bootstrap() {
         'maintenance:requests:read',
         'maintenance:requests:update',
         'maintenance:feedback:create',
+        'tenants:read',
+        'units:read',
+        'buildings:read',
         'documents:history',
         'documents:upload',
         'documents:search',
@@ -283,6 +292,7 @@ async function bootstrap() {
         'visitors:create',
         'utilities:meters:read',
         'utilities:readings:read',
+        'sites:read',
       ];
       for (const code of tenantPermCodes) {
         const p = allPerms.find((x) => x.code === code);
@@ -297,46 +307,87 @@ async function bootstrap() {
     console.warn('Could not map role permissions:', getErrorMessage(e));
   }
 
-  // Check if super admin user already exists
-  const existing = await userRepo.findOne({ where: { email: superAdminEmail } });
-  if (existing) {
-    console.log('Super admin already exists:', superAdminEmail);
-    // Ensure a UserRole linking the existing user to the SUPER_ADMIN role exists
-    try {
-      const existingUR = await userRoleRepo.findOne({ where: { user: { id: existing.id }, role: { id: superAdminRole?.id } } });
-      if (!existingUR && superAdminRole) {
-        const ur = userRoleRepo.create({ user: existing, role: superAdminRole });
-        await userRoleRepo.save(ur);
-        console.log('Assigned SUPER_ADMIN role to existing user');
-      }
-    } catch (err) {
-      console.warn('Could not ensure user_role link for existing user:', getErrorMessage(err));
-    }
-    await app.close();
-    return;
+  // --- super_admin seeding ---
+  let superAdmin = await userRepo.findOne({ where: { email: superAdminEmail } });
+  if (!superAdmin) {
+    const password_hash = await bcrypt.hash(superAdminPassword, 10);
+    superAdmin = userRepo.create({
+      name: 'Super Admin',
+      email: superAdminEmail,
+      password_hash,
+      role: 'super_admin',
+      is_active: true,
+    });
+    await userRepo.save(superAdmin);
+    console.log('Seeded super admin:', superAdminEmail);
   }
 
-  const password_hash = await bcrypt.hash(superAdminPassword, 10);
-  const user = userRepo.create({
-    name: 'Super Admin',
-    email: superAdminEmail,
-    password_hash,
-    role: 'super_admin',
-    is_active: true,
-  });
-  await userRepo.save(user);
-  console.log('Seeded super admin:', superAdminEmail, 'Password:', superAdminPassword);
-  // Ensure a UserRole linking the user to the SUPER_ADMIN role exists
-  try {
-    const existingUR = await userRoleRepo.findOne({ where: { user: { id: user.id }, role: { id: superAdminRole?.id } } });
-    if (!existingUR && superAdminRole) {
-      const ur = userRoleRepo.create({ user, role: superAdminRole });
-      await userRoleRepo.save(ur);
-      console.log('Assigned SUPER_ADMIN role to user');
+  // Ensure super_admin role link exists
+  if (superAdmin && superAdminRole) {
+    const existingUR = await userRoleRepo.findOne({ where: { user: { id: superAdmin.id }, role: { id: superAdminRole.id } } });
+    if (!existingUR) {
+      await userRoleRepo.save(userRoleRepo.create({ user: superAdmin, role: superAdminRole }));
+      console.log('Assigned super_admin role to user');
     }
-  } catch (err) {
-    console.warn('Could not ensure user_role link:', getErrorMessage(err));
   }
+
+  // --- Additional Seeded Users for Testing ---
+  const extraUsers = [
+    { name: 'Organization Admin', email: 'admin@example.com', password: 'Password123!', roleSlug: 'admin' },
+    { name: 'Site Admin User', email: 'siteadmin@example.com', password: 'Password123!', roleSlug: 'site_admin' },
+    { name: 'Contractor User', email: 'contractor@example.com', password: 'Password123!', roleSlug: 'contractor' },
+    { name: 'Tenant User', email: 'tenant@example.com', password: 'Password123!', roleSlug: 'tenant' },
+  ];
+
+  for (const extra of extraUsers) {
+    let user = await userRepo.findOne({ where: { email: extra.email } });
+    const targetRole = await roleRepo.findOne({ where: { name: extra.roleSlug } });
+    const password_hash = await bcrypt.hash(extra.password, 10);
+
+    if (!user) {
+      user = userRepo.create({
+        name: extra.name,
+        email: extra.email,
+        password_hash,
+        role: extra.roleSlug as any,
+        is_active: true,
+      });
+      await userRepo.save(user);
+      console.log(`Seeded user: ${extra.email} (Password: ${extra.password})`);
+    } else {
+      // Update password if user exists to ensure it matches the user's request
+      user.password_hash = password_hash;
+      await userRepo.save(user);
+      console.log(`Updated password for user: ${extra.email}`);
+    }
+
+    // Ensure UserRole link exists
+    if (user && targetRole) {
+      const existingUR = await userRoleRepo.findOne({
+        where: { user: { id: user.id }, role: { id: targetRole.id } }
+      });
+      if (!existingUR) {
+        await userRoleRepo.save(userRoleRepo.create({ user, role: targetRole }));
+        console.log(`Assigned ${extra.roleSlug} role to ${extra.email}`);
+      }
+
+      // --- Assign building management for demo purposes ---
+      if (extra.roleSlug === 'admin' || extra.roleSlug === 'site_admin') {
+        const assignmentRepo = app.get(getRepositoryToken(require('./src/modules/buildings/entities/building-admin-assignment.entity').BuildingAdminAssignment));
+        const buildingRepo = app.get(getRepositoryToken(require('./src/modules/buildings/entities/building.entity').Building));
+        const buildings = await buildingRepo.find();
+        
+        for (const b of buildings) {
+          const exists = await assignmentRepo.findOne({ where: { user: { id: user.id }, building: { id: b.id } } });
+          if (!exists) {
+            await assignmentRepo.save(assignmentRepo.create({ user, building: b }));
+            console.log(`Assigned building ${b.name} to ${extra.email}`);
+          }
+        }
+      }
+    }
+  }
+
   await app.close();
 }
 
