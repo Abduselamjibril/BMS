@@ -18,7 +18,7 @@ export class ReportsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Management dashboard KPIs' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
   async dashboard() {
@@ -27,7 +27,7 @@ export class ReportsController {
 
   @Get('financial')
   @ApiOperation({ summary: 'Monthly revenue trends' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async financial() {
@@ -63,7 +63,7 @@ export class ReportsController {
 
   @Get('overdue-aging')
   @ApiOperation({ summary: 'Overdue rent aging report' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async overdueAging() {
@@ -135,7 +135,7 @@ export class ReportsController {
 
   @Get('overdue-details')
   @ApiOperation({ summary: 'Detailed delay fee and eviction report' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async overdueDetails() {
@@ -144,7 +144,7 @@ export class ReportsController {
 
   @Get('detailed-financials')
   @ApiOperation({ summary: 'Recent financial transactions report' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async detailedFinancials() {
@@ -153,7 +153,7 @@ export class ReportsController {
 
   @Get('finance-analytics')
   @ApiOperation({ summary: 'Advanced financial visual analytics' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
   async financeAnalytics() {
@@ -189,7 +189,7 @@ export class ReportsController {
 
   @Get('export')
   @ApiOperation({ summary: 'Export reports to CSV' })
-  @Roles('super_admin', 'admin', 'site_admin')
+  @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
   async export(@Query('type') type: string, @Res() res: Response) {

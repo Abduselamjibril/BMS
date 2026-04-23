@@ -31,6 +31,7 @@ async function bootstrap() {
     { name: 'site_admin', description: 'Site-level Admin', type: 'system' },
     { name: 'contractor', description: 'Contractor', type: 'system' },
     { name: 'tenant', description: 'Default Tenant Role', type: 'system' },
+    { name: 'finance', description: 'Finance Controller', type: 'system' },
   ];
   // Ensure Postgres enum type contains our role names (safe: ignore errors)
   try {
@@ -303,6 +304,44 @@ async function bootstrap() {
       }
       console.log('Mapped default tenant permissions');
     }
+
+    // Map permissions for finance role
+    const financeRoleSeed = await roleRepo.findOne({ where: { name: 'finance' } });
+    if (financeRoleSeed) {
+      const financePermCodes = [
+        'finance:invoices:create',
+        'finance:invoices:all',
+        'finance:payments:verify',
+        'finance:tax_rules:update',
+        'finance:invoices:void',
+        'finance:bank_accounts:create',
+        'finance:invoices:generate',
+        'finance:reports:revenue',
+        'finance:reports:tax',
+        'finance:ledger:read',
+        'finance:analytics:read',
+        'finance:invoices:resend',
+        'finance:invoices:manage',
+        'finance:bank_accounts:read',
+        'finance:bank_accounts:update',
+        'finance:bank_accounts:delete',
+        'finance:deposit_advice:read',
+        'finance:deposit_advice:verify',
+        'finance:expenses:create',
+        'finance:expenses:read',
+        'finance:reports:p-and-l',
+        'reports:financial',
+        'reports:view'
+      ];
+      for (const code of financePermCodes) {
+        const p = allPerms.find((x) => x.code === code);
+        if (p) {
+          const exists = await rolePermRepo.findOne({ where: { role: { id: financeRoleSeed.id }, permission: { id: p.id } } });
+          if (!exists) await rolePermRepo.save({ role: financeRoleSeed, permission: p });
+        }
+      }
+      console.log('Mapped default finance permissions');
+    }
   } catch (e) {
     console.warn('Could not map role permissions:', getErrorMessage(e));
   }
@@ -333,10 +372,11 @@ async function bootstrap() {
 
   // --- Additional Seeded Users for Testing ---
   const extraUsers = [
-    { name: 'Organization Admin', email: 'admin@example.com', password: 'Password123!', roleSlug: 'admin' },
+     { name: 'Organization Admin', email: 'admin@example.com', password: 'Password123!', roleSlug: 'admin' },
     { name: 'Site Admin User', email: 'siteadmin@example.com', password: 'Password123!', roleSlug: 'site_admin' },
     { name: 'Contractor User', email: 'contractor@example.com', password: 'Password123!', roleSlug: 'contractor' },
     { name: 'Tenant User', email: 'tenant@example.com', password: 'Password123!', roleSlug: 'tenant' },
+    { name: 'Finance Controller', email: 'finance@example.com', password: 'Password123!', roleSlug: 'finance' },
   ];
 
   for (const extra of extraUsers) {
