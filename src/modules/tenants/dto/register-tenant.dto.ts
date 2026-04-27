@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { TenantStatus, TenantType } from '../entities/tenant.entity';
 
@@ -34,9 +35,10 @@ export class RegisterTenantDto {
   @MinLength(8)
   password!: string;
 
-  @ApiProperty({ required: false, example: '0012345678' })
+  @ApiProperty({ example: '0000011037' })
   @IsOptional()
   @IsString()
+  @Matches(/^[0-9]{10}$/, { message: 'TIN number must be exactly 10 digits' })
   tin_number?: string;
 
   @ApiProperty({ required: false, example: 'VAT-1234' })
@@ -77,4 +79,9 @@ export class RegisterTenantDto {
   @IsOptional()
   @IsString()
   profile_image?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  tin_certificate_image?: string;
 }

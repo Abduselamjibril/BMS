@@ -700,6 +700,49 @@ export class LeasesService {
     return { reminders, expired, lateFeesApplied };
   }
 
+  async update(id: string, dto: Partial<{
+    rent_amount: number;
+    start_date: string;
+    end_date: string;
+    service_charge: number;
+    billing_cycle: string;
+    deposit_amount: number;
+  }>): Promise<Lease> {
+    const cleanId = this.normalizeId(id);
+    const lease = await this.leaseRepository.findOne({
+      where: { id: cleanId },
+      relations: ['tenant', 'unit', 'building'],
+    });
+    if (!lease) throw new NotFoundException('Lease not found');
+
+    if (lease.status !== LeaseStatus.DRAFT) {
+      throw new BadRequestException('Only draft leases can be edited');
+    }
+
+    if (dto.start_date !== undefined) lease.start_date = dto.start_date;
+    if (dto.end_date !== undefined) lease.end_date = dto.end_date;
+
+    if (lease.start_date > lease.end_date) {
+      throw new BadRequestException('start_date must be <= end_date');
+    }
+
+    if (dto.start_date || dto.end_date) {
+      await this.ensureNoOverlap(lease.unit.id, lease.start_date, lease.end_date, lease.id);
+    }
+
+    if (dto.rent_amount !== undefined) lease.rent_amount = dto.rent_amount;
+    if (dto.service_charge !== undefined) lease.service_charge = dto.service_charge;
+    if (dto.billing_cycle !== undefined) lease.billing_cycle = dto.billing_cycle as any;
+    if (dto.deposit_amount !== undefined) lease.deposit_amount = dto.deposit_amount;
+
+    await this.leaseRepository.save(lease);
+
+    return this.leaseRepository.findOne({
+      where: { id: lease.id },
+      relations: ['tenant', 'unit', 'building'],
+    }) as Promise<Lease>;
+  }
+
   async remove(id: string): Promise<void> {
     const cleanId = this.normalizeId(id);
     const lease = await this.leaseRepository.findOne({

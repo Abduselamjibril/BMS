@@ -79,6 +79,8 @@ export class AmenitiesService {
   }
 
   async create(dto: CreateAmenityDto): Promise<Amenity> {
+    const existing = await this.amenityRepository.findOne({ where: { name: dto.name } });
+    if (existing) throw new ConflictException(`Amenity "${dto.name}" already exists`);
     const amenity = this.amenityRepository.create(dto);
     return this.amenityRepository.save(amenity);
   }

@@ -102,6 +102,13 @@ export class LeasesController {
     return this.leasesService.renew(id, dto);
   }
 
+  @Patch('leases/:id')
+  @Permissions('leases:create')
+  @ApiOperation({ summary: 'Update a draft lease (rent, dates, billing cycle, etc.)' })
+  async update(@Param('id') id: string, @Body() dto: any) {
+    return this.leasesService.update(id, dto);
+  }
+
   @Delete('leases/:id')
   @Permissions('leases:terminate')
   @ApiOperation({ summary: 'Delete a draft lease' })

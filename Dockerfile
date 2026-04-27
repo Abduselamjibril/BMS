@@ -18,8 +18,8 @@ COPY . .
 # This creates the 'dist' folder
 RUN npm run build
 
-# 7. Copy firebase-service-account.json for Firebase Admin SDK
-COPY firebase-service-account.json dist/src/config/firebase-service-account.json
+# 7. Copy firebase-service-account.json only if it exists (Optional for push notifications)
+RUN if [ -f firebase-service-account.json ]; then cp firebase-service-account.json dist/src/config/; fi
 
 # 7. Expose the application port 
 # (Matches the PORT=2546 in your .env)

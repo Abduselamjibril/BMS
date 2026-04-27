@@ -132,6 +132,7 @@ export class TenantsService {
     if (dto.detailed_address) tenant.detailed_address = dto.detailed_address;
     if (dto.license_image) tenant.license_image = dto.license_image;
     if (dto.profile_image) tenant.profile_image = dto.profile_image;
+    if (dto.tin_certificate_image) tenant.tin_certificate_image = dto.tin_certificate_image;
 
     return this.tenantRepository.save(tenant);
   }
@@ -232,6 +233,10 @@ export class TenantsService {
     if (dto.vat_reg_number !== undefined)
       tenant.vat_reg_number = dto.vat_reg_number;
     if (dto.status !== undefined) tenant.status = dto.status;
+    if (dto.detailed_address !== undefined) tenant.detailed_address = dto.detailed_address;
+    if (dto.id_image !== undefined) tenant.id_image = dto.id_image;
+    if (dto.license_image !== undefined) tenant.license_image = dto.license_image;
+    if (dto.profile_image !== undefined) tenant.profile_image = dto.profile_image;
 
     return this.tenantRepository.save(tenant);
   }

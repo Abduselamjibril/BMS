@@ -67,6 +67,12 @@ export class Building {
   @Column({ type: 'varchar', length: 255, nullable: true })
   location?: string;
 
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude?: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude?: number;
+
   @Column('int')
   total_units!: number;
 

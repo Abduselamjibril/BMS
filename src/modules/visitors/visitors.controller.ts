@@ -29,14 +29,12 @@ export class VisitorsController {
   }
 
   @Get()
-  @Permissions('visitors:read')
   @ApiOperation({ summary: 'List visitors; optional site_id query' })
   async findAll(@Req() req: any, @Query('site_id') siteId?: string) {
     return this.visitorsService.findAll(req.user, siteId);
   }
 
   @Get(':id')
-  @Permissions('visitors:read')
   async findOne(@Param('id') id: string, @Req() req: any) {
     return this.visitorsService.findOne(id, req.user);
   }
@@ -52,7 +50,7 @@ export class VisitorsController {
   }
 
   @Patch(':id/checkout')
-  @Permissions('visitors:checkout')
+  @ApiOperation({ summary: 'Checkout a visitor' })
   async checkout(@Param('id') id: string, @Req() req: any) {
     return this.visitorsService.checkOut(id, req.user);
   }

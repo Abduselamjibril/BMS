@@ -197,7 +197,6 @@ export class FinanceController {
   }
 
   @Get('bank-accounts')
-  @Permissions('finance:bank_accounts:read')
   @ApiOperation({ summary: 'List all bank accounts' })
   @ApiResponse({ status: 200, description: 'Bank accounts list.' })
   async getBankAccounts() {

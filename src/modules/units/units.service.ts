@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Unit, UnitStatus } from './entities/unit.entity';
+import { Unit, UnitStatus, UnitType } from './entities/unit.entity';
 import { Building } from '../buildings/entities/building.entity';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UnitAmenity } from '../amenities/entities/unit-amenity.entity';
@@ -36,7 +36,16 @@ export class UnitsService {
     if (exists)
       throw new ConflictException('Unit number must be unique per building');
 
-    const unit = this.unitRepository.create({ ...dto, building });
+    const isCommercial = dto.type === UnitType.SHOP || dto.type === UnitType.OFFICE;
+    const bedrooms = isCommercial ? 0 : (dto.bedrooms || 0);
+    const bathrooms = isCommercial ? 0 : (dto.bathrooms || 0);
+
+    const unit = this.unitRepository.create({ 
+      ...dto, 
+      building,
+      bedrooms,
+      bathrooms
+    });
     return this.unitRepository.save(unit);
   }
 
@@ -67,6 +76,14 @@ export class UnitsService {
       updatePayload.building = building;
       delete updatePayload.buildingId;
     }
+    if (dto.type) {
+      const isCommercial = dto.type === UnitType.SHOP || dto.type === UnitType.OFFICE;
+      if (isCommercial) {
+        updatePayload.bedrooms = 0;
+        updatePayload.bathrooms = 0;
+      }
+    }
+
     await this.unitRepository.update(id, updatePayload);
     return this.findOne(id);
   }

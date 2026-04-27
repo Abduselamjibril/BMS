@@ -1,7 +1,7 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsNumber } from 'class-validator';
 import { CreateBuildingDto } from './create-building.dto';
-import { BuildingType } from '../entities/building.entity';
+import { BuildingType, BuildingStatus } from '../entities/building.entity';
 
 export class UpdateBuildingDto extends PartialType(CreateBuildingDto) {
   @IsString()
@@ -35,4 +35,16 @@ export class UpdateBuildingDto extends PartialType(CreateBuildingDto) {
   @IsString()
   @IsOptional()
   image_url?: string;
+
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @IsEnum(BuildingStatus)
+  @IsOptional()
+  status?: BuildingStatus;
 }

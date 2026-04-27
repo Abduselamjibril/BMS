@@ -8,6 +8,7 @@ import {
   JoinColumn,
   ManyToOne,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { TenantApplication } from './tenant-application.entity';
@@ -25,6 +26,9 @@ export enum TenantType {
 }
 
 @Entity('tenants')
+@Index('idx_tenant_phone', ['phone'])
+@Index('idx_tenant_email', ['email'])
+@Index('idx_tenant_status', ['status'])
 export class Tenant {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -68,6 +72,9 @@ export class Tenant {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   profile_image?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  tin_certificate_image?: string;
 
   @CreateDateColumn()
   created_at!: Date;

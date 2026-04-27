@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
-import { BuildingType } from '../entities/building.entity';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
+import { BuildingType, BuildingStatus } from '../entities/building.entity';
 
 export class CreateBuildingDto {
   @ApiProperty({
@@ -10,10 +10,12 @@ export class CreateBuildingDto {
   })
   @IsEnum(BuildingType)
   type!: BuildingType;
+
   @ApiProperty({ description: 'Unique building code', example: 'BLD-001' })
   @IsString()
   @IsNotEmpty()
   code!: string;
+
   @ApiProperty({ description: 'Building name' })
   @IsString()
   @IsNotEmpty()
@@ -49,4 +51,24 @@ export class CreateBuildingDto {
   @IsString()
   @IsNotEmpty()
   ownerId!: string;
+
+  @ApiProperty({ description: 'Building latitude', required: false })
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @ApiProperty({ description: 'Building longitude', required: false })
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @ApiProperty({
+    description: 'Building status',
+    enum: BuildingStatus,
+    required: false,
+    default: BuildingStatus.ACTIVE,
+  })
+  @IsOptional()
+  @IsEnum(BuildingStatus)
+  status?: BuildingStatus;
 }

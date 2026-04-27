@@ -341,9 +341,20 @@ export class ReportsService {
 
     // 2. Flatten and Dynamic Header Generation
     const flattened = rawData.map(item => this.flattenData(item, type));
-    const headers = Object.keys(flattened[0]).join(',');
-    const rows = flattened.map(obj => 
-      Object.values(obj).map(val => {
+    if (flattened.length === 0) return 'No data available for export';
+    
+    const headersList = Object.keys(flattened[0]);
+    const headers = headersList.join(',');
+    
+    const rows = flattened.map(itemObj => 
+      headersList.map(header => {
+        let val = itemObj[header];
+        
+        // Final safety check for Rent column
+        if (header === 'Rent' && (val === null || val === undefined || val === '')) {
+          val = 0;
+        }
+        
         const str = String(val ?? '');
         return str.includes(',') ? `"${str}"` : str;
       }).join(',')
@@ -364,12 +375,13 @@ export class ReportsService {
       flat['Total Units'] = obj.total_units || 0;
     } else if (type === 'units') {
       flat['ID'] = obj.id;
-      flat['Building'] = obj.building?.name || 'N/A';
+      // Handle both raw query result (building_name) and entity result (building.name)
+      flat['Building'] = obj.building_name || obj.building?.name || 'N/A';
       flat['Unit Number'] = obj.unit_number;
       flat['Floor'] = obj.floor;
       flat['Type'] = obj.type;
       flat['Status'] = obj.status;
-      flat['Rent'] = obj.rent_amount;
+      flat['Rent'] = obj.rent_price || obj.rent || 0;
     } else if (type === 'tenants') {
       flat['ID'] = obj.id;
       flat['First Name'] = obj.first_name;
@@ -383,7 +395,7 @@ export class ReportsService {
       flat['Unit'] = obj.unit?.unit_number || 'N/A';
       flat['Start Date'] = obj.start_date;
       flat['End Date'] = obj.end_date;
-      flat['Rent'] = obj.rent_amount;
+      flat['Rent'] = obj.rent_amount || obj.rent || obj.rent_price || 0;
       flat['Status'] = obj.status;
     } else if (type === 'payments') {
       flat['ID'] = obj.id;
