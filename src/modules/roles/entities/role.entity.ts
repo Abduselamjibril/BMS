@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
 import { UserRole } from './user-role.entity';
 import { RolePermission } from './role-permission.entity';
 
@@ -11,6 +11,7 @@ export enum RoleType {
 }
 
 @Entity('roles')
+@Index('idx_role_type', ['type'])
 export class Role {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

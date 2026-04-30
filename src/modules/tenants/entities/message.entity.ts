@@ -5,10 +5,12 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('messages')
+@Index('idx_msg_read_status', ['read_status'])
 export class Message {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -8,6 +8,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 import { Tenant } from './tenant.entity';
 
@@ -19,6 +20,7 @@ export enum TenantApplicationStatus {
 }
 
 @Entity('tenant_applications')
+@Index('idx_tenantapp_status', ['status'])
 export class TenantApplication {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

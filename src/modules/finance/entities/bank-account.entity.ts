@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
 
 @Entity('bank_accounts')
+@Index('idx_bank_status', ['status'])
 export class BankAccount {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

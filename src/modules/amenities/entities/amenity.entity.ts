@@ -1,13 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
 import { BuildingAmenity } from './building-amenity.entity';
 import { UnitAmenity } from './unit-amenity.entity';
 
 @Entity('amenities')
+@Index('idx_amenity_category', ['category'])
 export class Amenity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ length: 100, unique: true })
+  @Column({ length: 100 })
   name!: string;
 
   @Column({ type: 'text', nullable: true })

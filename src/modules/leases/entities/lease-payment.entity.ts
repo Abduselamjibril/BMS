@@ -6,6 +6,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Lease } from './lease.entity';
 
@@ -16,6 +17,8 @@ export enum LeasePaymentStatus {
 }
 
 @Entity('lease_payments')
+@Index('idx_leasepay_status', ['status'])
+@Index('idx_leasepay_due_date', ['due_date'])
 export class LeasePayment {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

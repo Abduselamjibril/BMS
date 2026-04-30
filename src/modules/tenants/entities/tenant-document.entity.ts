@@ -5,6 +5,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 import { Tenant } from './tenant.entity';
 
@@ -16,6 +17,7 @@ export enum TenantDocumentType {
 }
 
 @Entity('tenant_documents')
+@Index('idx_tenantdoc_type', ['type'])
 export class TenantDocument {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

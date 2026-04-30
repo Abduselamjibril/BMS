@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { ManagementCompany } from '../../management/entities/management-company.entity';
 
@@ -22,6 +22,9 @@ export enum CommissionFrequency {
 }
 
 @Entity('commission_rules')
+@Index('idx_commrule_nominee', ['nominee_id'])
+@Index('idx_commrule_building', ['building_id'])
+@Index('idx_commrule_active', ['is_active'])
 export class CommissionRule {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index } from 'typeorm';
 import { Invoice } from './invoice.entity';
 
 export enum InvoiceItemType {
@@ -9,6 +9,7 @@ export enum InvoiceItemType {
 }
 
 @Entity('invoice_items')
+@Index('idx_invitem_type', ['type'])
 export class InvoiceItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

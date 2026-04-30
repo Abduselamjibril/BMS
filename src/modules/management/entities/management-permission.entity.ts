@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, Index } from 'typeorm';
 import { ManagementAssignment } from './management-assignment.entity';
 
 @Entity('management_permissions')
+@Index('idx_mgmtperm_assignment', ['assignment_id'])
 export class ManagementPermission {
   @PrimaryGeneratedColumn('uuid')
   id: string;

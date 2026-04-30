@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ManagementCompany } from '../../management/entities/management-company.entity';
 import { Building } from '../../buildings/entities/building.entity';
 
@@ -10,6 +10,9 @@ export enum CommissionStatus {
 }
 
 @Entity('commissions')
+@Index('idx_comm_status', ['status'])
+@Index('idx_comm_nominee', ['nominee_id'])
+@Index('idx_comm_source_type', ['source_type'])
 export class Commission {
   @PrimaryGeneratedColumn('uuid')
   id: string;

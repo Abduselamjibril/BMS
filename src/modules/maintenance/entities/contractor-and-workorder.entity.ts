@@ -4,11 +4,13 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { MaintenanceRequest } from './maintenance-request.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('contractors')
+@Index('idx_contractor_status', ['status'])
 export class Contractor {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -36,6 +38,7 @@ export class Contractor {
 }
 
 @Entity('work_orders')
+@Index('idx_workorder_status', ['status'])
 export class WorkOrder {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

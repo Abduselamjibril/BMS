@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { CommissionPayment } from './commission-payment.entity';
 import { Commission } from './commission.entity';
 
 @Entity('commission_payment_items')
+@Index('idx_commitem_payment', ['payment_id'])
 export class CommissionPaymentItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;

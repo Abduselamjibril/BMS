@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ManagementCompany } from './management-company.entity';
 import { Building } from '../../buildings/entities/building.entity';
 import { Unit } from '../../units/entities/unit.entity';
@@ -9,6 +9,9 @@ export enum ManagementScope {
 }
 
 @Entity('management_assignments')
+@Index('idx_mgmtassign_company', ['company_id'])
+@Index('idx_mgmtassign_building', ['building_id'])
+@Index('idx_mgmtassign_active', ['is_active'])
 export class ManagementAssignment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,7 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, JoinColumn, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 
 @Entity('maintenance_schedules')
+@Index('idx_maintsched_due', ['next_due_date'])
+@Index('idx_maintsched_active', ['is_active'])
 export class MaintenanceSchedule {
   @PrimaryGeneratedColumn('uuid')
   id: string;

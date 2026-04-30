@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { LeaseTender } from './lease-tender.entity';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 
@@ -10,6 +10,8 @@ export enum BidStatus {
 }
 
 @Entity('tender_bids')
+@Index('idx_bid_status', ['status'])
+@Index('idx_bid_tender', ['tender_id'])
 export class TenderBid {
   @PrimaryGeneratedColumn('uuid')
   id: string;

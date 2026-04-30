@@ -6,6 +6,7 @@ import {
   JoinColumn,
   OneToMany,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 import { Unit } from '../../units/entities/unit.entity';
@@ -25,6 +26,9 @@ export enum MaintenanceStatus {
 }
 
 @Entity('maintenance_requests')
+@Index('idx_maint_status', ['status'])
+@Index('idx_maint_priority', ['priority'])
+@Index('idx_maint_created_at', ['created_at'])
 export class MaintenanceRequest {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

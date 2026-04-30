@@ -1,9 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { Lease } from '../../leases/entities/lease.entity';
 import { User } from '../../users/entities/user.entity';
 import { InspectionType, InspectionStatus, ItemCondition } from './inspection.types';
 
 @Entity('inspections')
+@Index('idx_inspection_status', ['status'])
+@Index('idx_inspection_type', ['type'])
 export class Inspection {
   @PrimaryGeneratedColumn('uuid')
   id: string;

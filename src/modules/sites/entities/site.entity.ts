@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 
 @Entity('sites')
+@Index('idx_site_city', ['city'])
 export class Site {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

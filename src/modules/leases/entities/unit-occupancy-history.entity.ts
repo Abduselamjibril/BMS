@@ -6,6 +6,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Unit } from '../../units/entities/unit.entity';
 import { Tenant } from '../../tenants/entities/tenant.entity';
@@ -16,6 +17,7 @@ export enum OccupancyStatus {
 }
 
 @Entity('unit_occupancy_history')
+@Index('idx_occupancy_status', ['status'])
 export class UnitOccupancyHistory {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

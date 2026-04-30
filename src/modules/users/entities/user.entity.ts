@@ -6,6 +6,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { UserRole } from '../../roles/entities/user-role.entity';
 import { LoginHistory } from './login-history.entity';
@@ -18,6 +19,8 @@ export enum UserStatus {
 }
 
 @Entity('users')
+@Index('idx_user_email', ['email'])
+@Index('idx_user_status', ['status'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

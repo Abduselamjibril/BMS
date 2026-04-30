@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index } from 'typeorm';
 import { MaintenanceRequest } from './maintenance-request.entity';
 import { Tenant } from '../../tenants/entities/tenant.entity';
 
 @Entity('maintenance_feedback')
+@Index('idx_maintfb_rating', ['rating'])
 export class MaintenanceFeedback {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

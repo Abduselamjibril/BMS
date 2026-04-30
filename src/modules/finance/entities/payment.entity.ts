@@ -1,5 +1,5 @@
 import { CreateDateColumn } from 'typeorm';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Invoice } from './invoice.entity';
 import { BankAccount } from './bank-account.entity';
 
@@ -10,6 +10,8 @@ export enum PaymentStatus {
 }
 
 @Entity('payments')
+@Index('idx_payment_status', ['status'])
+@Index('idx_payment_created_at', ['created_at'])
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

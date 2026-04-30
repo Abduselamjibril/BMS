@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, Index } from 'typeorm';
 import { ManagementAssignment } from './management-assignment.entity';
 
 @Entity('management_companies')
+@Index('idx_mgmtco_active', ['is_active'])
 export class ManagementCompany {
   @PrimaryGeneratedColumn('uuid')
   id: string;

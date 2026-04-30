@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { Amenity } from './amenity.entity';
 
 @Entity('building_amenities')
+@Index('idx_bldgamen_building', ['building'])
 export class BuildingAmenity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

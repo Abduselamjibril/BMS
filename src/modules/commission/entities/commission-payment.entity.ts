@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany, Index } from 'typeorm';
 import { ManagementCompany } from '../../management/entities/management-company.entity';
 import { CommissionPaymentItem } from './commission-payment-item.entity';
 
@@ -8,6 +8,7 @@ export enum CommissionPaymentStatus {
 }
 
 @Entity('commission_payments')
+@Index('idx_commpay_status', ['status'])
 export class CommissionPayment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

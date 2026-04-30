@@ -5,11 +5,13 @@ import {
   Column,
   CreateDateColumn,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Building } from './building.entity';
 
 @Entity('building_admin_assignments')
+@Index('idx_baa_status', ['status'])
 export class BuildingAdminAssignment {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -3,9 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('user_device_tokens')
+@Index('idx_devtoken_user', ['user_id'])
 export class UserDeviceToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;

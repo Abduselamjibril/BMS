@@ -127,6 +127,27 @@ export class FinanceController {
     });
   }
 
+  @Get('payments')
+  @ApiOperation({ summary: 'Get payment history (scoped & filtered)' })
+  @ApiResponse({ status: 200, description: 'Payments history list.' })
+  async getPayments(
+    @Req() req: any,
+    @Query('building_id') building_id?: string,
+    @Query('tenant_id') tenant_id?: string,
+    @Query('status') status?: string,
+    @Query('start_date') start_date?: string,
+    @Query('end_date') end_date?: string,
+  ) {
+    return this.financeService.getPayments({
+      building_id,
+      tenant_id,
+      status,
+      start_date,
+      end_date,
+      authenticatedUser: req.user,
+    });
+  }
+
   @Get('analytics')
   @Permissions('finance:analytics:read')
   @ApiOperation({ summary: 'Get finance dashboard analytics and trends' })

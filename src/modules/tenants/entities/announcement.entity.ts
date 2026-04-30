@@ -8,6 +8,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 
 export enum AnnouncementTarget {
@@ -17,6 +18,8 @@ export enum AnnouncementTarget {
 }
 
 @Entity('announcements')
+@Index('idx_announce_target', ['target'])
+@Index('idx_announce_created_at', ['created_at'])
 export class Announcement {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 
 @Entity('owners')
+@Index('idx_owner_email', ['email'])
 export class Owner {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

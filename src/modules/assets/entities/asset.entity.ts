@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 import { Unit } from '../../units/entities/unit.entity';
@@ -27,6 +28,9 @@ export enum AssetCondition {
 }
 
 @Entity('assets')
+@Index('idx_asset_category', ['category'])
+@Index('idx_asset_condition', ['condition'])
+@Index('idx_asset_building', ['buildingId'])
 export class Asset {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

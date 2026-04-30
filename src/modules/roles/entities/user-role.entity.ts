@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Role } from './role.entity';
 
 @Entity('user_roles')
+@Index('idx_userrole_user', ['user'])
 export class UserRole {
   @PrimaryGeneratedColumn('uuid')
   id: string;

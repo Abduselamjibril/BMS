@@ -1,7 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
 
 @Entity('expenses')
+@Index('idx_expense_category', ['category'])
+@Index('idx_expense_building', ['building_id'])
+@Index('idx_expense_date', ['date'])
 export class Expense {
   @PrimaryGeneratedColumn('uuid')
   id: string;

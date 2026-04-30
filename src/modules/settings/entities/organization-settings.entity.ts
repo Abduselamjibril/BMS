@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
 
 export enum LateFeeType {
   PERCENTAGE = 'PERCENTAGE',
@@ -6,6 +6,7 @@ export enum LateFeeType {
 }
 
 @Entity('organization_settings')
+@Index('idx_orgsettings_company', ['company_name'])
 export class OrganizationSettings {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

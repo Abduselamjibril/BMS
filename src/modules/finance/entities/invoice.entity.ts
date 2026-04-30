@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Lease } from '../../leases/entities/lease.entity';
 import { Tenant } from '../../tenants/entities/tenant.entity';
@@ -22,6 +23,8 @@ export enum InvoiceStatus {
 }
 
 @Entity('invoices')
+@Index('idx_invoice_status', ['status'])
+@Index('idx_invoice_due_date', ['due_date'])
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

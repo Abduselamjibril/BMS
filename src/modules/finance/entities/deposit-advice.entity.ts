@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index } from 'typeorm';
 import { BankAccount } from './bank-account.entity';
 
 @Entity('deposit_advices')
+@Index('idx_deposit_status', ['status'])
 export class DepositAdvice {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

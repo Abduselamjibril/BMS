@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('automation_jobs')
+@Index('idx_autojob_enabled', ['is_enabled'])
 export class AutomationJob {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
