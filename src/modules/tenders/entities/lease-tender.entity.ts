@@ -14,6 +14,9 @@ export enum TenderStatus {
 @Entity('lease_tenders')
 @Index('idx_tender_status', ['status'])
 @Index('idx_tender_closing_date', ['closing_date'])
+@Index('idx_tender_title', ['title'])
+@Index('idx_tender_building', ['building_id'])
+@Index('idx_tender_unit', ['unit_id'])
 export class LeaseTender {
   @PrimaryGeneratedColumn('uuid')
   id: string;

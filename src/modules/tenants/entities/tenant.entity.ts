@@ -29,6 +29,9 @@ export enum TenantType {
 @Index('idx_tenant_phone', ['phone'])
 @Index('idx_tenant_email', ['email'])
 @Index('idx_tenant_status', ['status'])
+@Index('idx_tenant_first_name', ['first_name'])
+@Index('idx_tenant_last_name', ['last_name'])
+@Index('idx_tenant_managed_by_company', ['managed_by_company_id'])
 export class Tenant {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

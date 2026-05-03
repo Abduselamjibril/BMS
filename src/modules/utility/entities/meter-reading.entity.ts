@@ -10,6 +10,8 @@ import {
 import { UtilityMeter } from './utility-meter.entity';
 
 @Entity('meter_readings')
+@Index('idx_reading_date', ['reading_date'])
+@Index('idx_reading_billed', ['is_billed'])
 export class MeterReading {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

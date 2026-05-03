@@ -12,6 +12,10 @@ export enum UtilityType {
 }
 
 @Entity('utility_meters')
+@Index('idx_meter_serial', ['serial_no'])
+@Index('idx_meter_type', ['type'])
+@Index('idx_meter_building', ['building_id'])
+@Index('idx_meter_site', ['site_id'])
 export class UtilityMeter {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

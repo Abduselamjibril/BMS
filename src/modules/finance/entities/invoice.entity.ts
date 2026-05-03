@@ -25,6 +25,9 @@ export enum InvoiceStatus {
 @Entity('invoices')
 @Index('idx_invoice_status', ['status'])
 @Index('idx_invoice_due_date', ['due_date'])
+@Index('idx_invoice_tenant', ['tenant'])
+@Index('idx_invoice_lease', ['lease'])
+@Index('idx_invoice_unit', ['unit'])
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

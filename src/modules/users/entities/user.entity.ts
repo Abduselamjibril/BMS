@@ -21,6 +21,8 @@ export enum UserStatus {
 @Entity('users')
 @Index('idx_user_email', ['email'])
 @Index('idx_user_status', ['status'])
+@Index('idx_user_name', ['name'])
+@Index('idx_user_company', ['company_id'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

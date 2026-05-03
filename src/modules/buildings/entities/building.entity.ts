@@ -27,6 +27,9 @@ export enum BuildingStatus {
 @Index('idx_building_city', ['city'])
 @Index('idx_building_owner', ['owner'])
 @Index('idx_building_type', ['type'])
+@Index('idx_building_name', ['name'])
+@Index('idx_building_status', ['status'])
+@Index('idx_building_site', ['site'])
 export class Building {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

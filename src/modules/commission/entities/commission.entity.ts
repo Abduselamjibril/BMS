@@ -13,6 +13,8 @@ export enum CommissionStatus {
 @Index('idx_comm_status', ['status'])
 @Index('idx_comm_nominee', ['nominee_id'])
 @Index('idx_comm_source_type', ['source_type'])
+@Index('idx_comm_building', ['building_id'])
+@Index('idx_comm_source_id', ['source_id'])
 export class Commission {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -18,6 +18,10 @@ export enum QRCodeType {
 }
 
 @Entity('qrcodes')
+@Index('idx_qr_unit', ['unit_id'])
+@Index('idx_qr_building', ['building_id'])
+@Index('idx_qr_status', ['status'])
+@Index('idx_qr_type', ['type'])
 export class QRCode {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

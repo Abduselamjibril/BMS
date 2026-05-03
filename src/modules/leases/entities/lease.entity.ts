@@ -38,6 +38,9 @@ export enum LeaseStatus {
 @Index('idx_lease_status', ['status'])
 @Index('idx_lease_end_date', ['end_date'])
 @Index('idx_lease_building', ['building_id'])
+@Index('idx_lease_tenant', ['tenant_id'])
+@Index('idx_lease_unit', ['unit_id'])
+@Index('idx_lease_managed_by_company', ['managed_by_company_id'])
 export class Lease {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -3,6 +3,8 @@ import { Building } from '../../buildings/entities/building.entity';
 
 @Entity('owners')
 @Index('idx_owner_email', ['email'])
+@Index('idx_owner_name', ['name'])
+@Index('idx_owner_phone', ['phone'])
 export class Owner {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

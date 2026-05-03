@@ -4,6 +4,7 @@ import { UnitAmenity } from './unit-amenity.entity';
 
 @Entity('amenities')
 @Index('idx_amenity_category', ['category'])
+@Index('idx_amenity_name', ['name'])
 export class Amenity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

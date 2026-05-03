@@ -31,6 +31,8 @@ export enum AssetCondition {
 @Index('idx_asset_category', ['category'])
 @Index('idx_asset_condition', ['condition'])
 @Index('idx_asset_building', ['buildingId'])
+@Index('idx_asset_name', ['name'])
+@Index('idx_asset_unit', ['unitId'])
 export class Asset {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

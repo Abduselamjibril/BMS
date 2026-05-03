@@ -9,6 +9,8 @@ import {
 @Entity('documents')
 @Index('idx_module_type', ['module_type'])
 @Index('idx_module_id', ['module_id'])
+@Index('idx_doc_category', ['category'])
+@Index('idx_doc_file_name', ['file_name'])
 export class Document {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

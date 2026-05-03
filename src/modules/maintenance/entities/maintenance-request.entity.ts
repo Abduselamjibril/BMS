@@ -29,6 +29,11 @@ export enum MaintenanceStatus {
 @Index('idx_maint_status', ['status'])
 @Index('idx_maint_priority', ['priority'])
 @Index('idx_maint_created_at', ['created_at'])
+@Index('idx_maint_category', ['category'])
+@Index('idx_maint_tenant', ['tenant'])
+@Index('idx_maint_unit', ['unit'])
+@Index('idx_maint_building', ['building'])
+@Index('idx_maint_managed_by_company', ['managed_by_company_id'])
 export class MaintenanceRequest {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

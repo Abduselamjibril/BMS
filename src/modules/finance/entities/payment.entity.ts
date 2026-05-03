@@ -12,6 +12,8 @@ export enum PaymentStatus {
 @Entity('payments')
 @Index('idx_payment_status', ['status'])
 @Index('idx_payment_created_at', ['created_at'])
+@Index('idx_payment_reference', ['reference_no'])
+@Index('idx_payment_invoice', ['invoice'])
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

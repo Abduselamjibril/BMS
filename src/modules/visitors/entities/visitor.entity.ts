@@ -16,6 +16,9 @@ export enum VisitorStatus {
 
 @Entity('visitors')
 @Index('idx_visitor_status', ['status'])
+@Index('idx_visitor_name', ['visitor_name'])
+@Index('idx_visitor_phone', ['phone'])
+@Index('idx_visitor_check_in', ['check_in_time'])
 export class Visitor {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

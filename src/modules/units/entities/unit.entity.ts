@@ -28,6 +28,9 @@ export enum UnitStatus {
 
 @Entity('units')
 @Index('idx_unit_status', ['status'])
+@Index('idx_unit_number', ['unit_number'])
+@Index('idx_unit_building', ['building'])
+@Index('idx_unit_type', ['type'])
 export class Unit {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
