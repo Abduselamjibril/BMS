@@ -56,6 +56,12 @@ export class Lease {
   @JoinColumn({ name: 'unit_id' })
   unit!: Unit;
 
+  @Column({ nullable: true })
+  tenant_id!: string;
+
+  @Column({ nullable: true })
+  unit_id!: string;
+
   @ManyToOne(() => Building, { nullable: false })
   @JoinColumn({ name: 'building_id' })
   building!: Building;
