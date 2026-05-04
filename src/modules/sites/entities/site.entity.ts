@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { Building } from '../../buildings/entities/building.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('sites')
 @Index('idx_site_city', ['city'])
@@ -42,4 +43,11 @@ export class Site {
 
   @OneToMany(() => Building, (building) => building.site)
   buildings!: Building[];
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'manager_id' })
+  manager?: User;
+
+  @Column({ nullable: true })
+  manager_id?: string;
 }

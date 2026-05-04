@@ -91,8 +91,9 @@ export class MaintenanceService {
 
     const request = this.requestRepo.create({
       ...dto,
-      tenant: { id: targetTenantId },
+      tenant: targetTenantId ? { id: targetTenantId } : undefined,
       unit: dto.unit_id ? { id: dto.unit_id } : undefined,
+      building: dto.building_id ? { id: dto.building_id } : undefined,
       status: MaintenanceStatus.SUBMITTED,
     }) as unknown as MaintenanceRequest;
 
@@ -117,9 +118,29 @@ export class MaintenanceService {
     const isAdmin = roleNames.some(r => ['super_admin', 'admin'].includes(r));
     const isContractor = roleNames.includes('contractor');
 
-    // Admin or Contractor see all requests (to enable assigning/viewing)
-    if (isAdmin || isContractor) {
+    // Admin see all requests
+    if (isAdmin) {
       return this.requestRepo.find({ relations: ['tenant', 'tenant.user', 'unit', 'workOrders', 'workOrders.contractor', 'feedbacks'] });
+    }
+
+    // Contractor scoping
+    if (isContractor) {
+      const contractor = await this.contractorRepo.findOne({
+        where: { user: { id: currentUserId } },
+      });
+      
+      if (!contractor) return [];
+
+      return this.requestRepo
+        .createQueryBuilder('request')
+        .innerJoinAndSelect('request.workOrders', 'wo')
+        .leftJoinAndSelect('wo.contractor', 'contractor')
+        .leftJoinAndSelect('request.tenant', 'tenant')
+        .leftJoinAndSelect('tenant.user', 'user')
+        .leftJoinAndSelect('request.unit', 'unit')
+        .leftJoinAndSelect('request.feedbacks', 'feedbacks')
+        .where('contractor.id = :cid', { cid: contractor.id })
+        .getMany();
     }
 
     if (roleNames.includes('nominee_admin')) {
@@ -206,7 +227,31 @@ export class MaintenanceService {
     return this.contractorRepo.update(id, dto);
   }
 
-  async getWorkOrders() {
+  async getWorkOrders(authenticatedUser?: any) {
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+      const isAdmin = roleNames.some(r => ['super_admin', 'admin'].includes(r));
+      const isContractor = roleNames.includes('contractor');
+
+      if (isContractor) {
+        const contractor = await this.contractorRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (contractor) {
+          return this.workOrderRepo.find({
+            where: { contractor: { id: contractor.id } },
+            relations: ['request', 'request.tenant', 'request.unit', 'request.building', 'contractor'],
+            order: { created_at: 'DESC' },
+          });
+        }
+        return [];
+      }
+    }
+
     return this.workOrderRepo.find({
       relations: ['request', 'request.tenant', 'request.unit', 'request.building', 'contractor'],
       order: { created_at: 'DESC' },
@@ -406,19 +451,22 @@ export class MaintenanceService {
     return feedback;
   }
 
-  async getDashboardKpis() {
+  async getDashboardKpis(buildingIds?: string[]) {
     // KPIs: Avg resolution time, contractor performance
 
     // 1. Average resolution time in seconds
-    const completedOrders = await this.workOrderRepo.find({
-      where: [
-        { status: 'completed' as any },
-        { status: 'COMPLETED' as any },
-        { status: 'closed' as any },
-        { status: 'CLOSED' as any },
-      ],
-      relations: ['contractor'],
-    });
+    const completedOrdersQb = this.workOrderRepo
+      .createQueryBuilder('wo')
+      .leftJoinAndSelect('wo.contractor', 'contractor')
+      .innerJoin('wo.request', 'r')
+      .leftJoin('r.unit', 'u')
+      .where('wo.status IN (:...statuses)', { statuses: ['completed', 'COMPLETED', 'closed', 'CLOSED'] });
+
+    if (buildingIds) {
+      completedOrdersQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    }
+
+    const completedOrders = await completedOrdersQb.getMany();
 
     const totalResolutionTime = completedOrders.reduce((sum, wo) => {
       const startTime = wo.started_at?.getTime() || wo.created_at?.getTime();
@@ -433,7 +481,7 @@ export class MaintenanceService {
       ? totalResolutionTime / completedOrders.length / 1000 // Convert ms to seconds
       : 0;
 
-    // 2. Contractor performance ranking
+    // 2. Contractor performance ranking (filtered by work orders in scoped buildings)
     const contractors = await this.contractorRepo.find();
     const contractorStats = await Promise.all(
       contractors.map(async (contractor) => {
@@ -456,22 +504,33 @@ export class MaintenanceService {
     );
 
     // 3. Monthly maintenance cost trends (last 6 months)
-    const monthlyTrends = await this.workOrderRepo
+    const monthlyTrendsQb = this.workOrderRepo
       .createQueryBuilder('wo')
       .select("to_char(wo.completed_at, 'Mon')", 'month')
       .addSelect('SUM(wo.actual_cost)', 'total')
+      .innerJoin('wo.request', 'r')
+      .leftJoin('r.unit', 'u')
       .where('wo.status = :status', { status: MaintenanceStatus.COMPLETED as any })
-      .andWhere('wo.completed_at IS NOT NULL')
-      .groupBy('month')
-      .getRawMany();
+      .andWhere('wo.completed_at IS NOT NULL');
 
-    const pendingRequestsCount = await this.requestRepo.count({
-      where: [
-        { status: MaintenanceStatus.SUBMITTED },
-        { status: MaintenanceStatus.ASSIGNED },
-        { status: MaintenanceStatus.IN_PROGRESS },
-      ],
-    });
+    if (buildingIds) {
+      monthlyTrendsQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    }
+
+    const monthlyTrends = await monthlyTrendsQb.groupBy('month').getRawMany();
+
+    // 4. Pending Requests Count
+    const pendingQb = this.requestRepo.createQueryBuilder('r')
+      .leftJoin('r.unit', 'u')
+      .where('r.status IN (:...statuses)', { 
+        statuses: [MaintenanceStatus.SUBMITTED, MaintenanceStatus.ASSIGNED, MaintenanceStatus.IN_PROGRESS] 
+      });
+
+    if (buildingIds) {
+      pendingQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    }
+
+    const pendingRequestsCount = await pendingQb.getCount();
 
     return {
       avgResolutionTime,

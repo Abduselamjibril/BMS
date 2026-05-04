@@ -14,6 +14,7 @@ import { Between } from 'typeorm';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Visitor } from '../visitors/entities/visitor.entity';
 import { InvoiceItem, InvoiceItemType } from '../finance/entities/invoice-item.entity';
+import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 
 @Injectable()
 export class ReportsService {
@@ -38,31 +39,93 @@ export class ReportsService {
     private readonly visitorRepo: Repository<Visitor>,
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepo: Repository<InvoiceItem>,
+    @InjectRepository(BuildingAdminAssignment)
+    private readonly adminRepo: Repository<BuildingAdminAssignment>,
     private readonly maintenanceService: MaintenanceService,
   ) {}
 
-  async getPeopleReport() {
+  private async getScopingCriteria(user: any) {
+    if (!user) return null;
+    
+    // Super Admin and Admin can see everything
+    const roles = user.roles || [];
+    if (roles.includes('super_admin') || roles.includes('admin')) {
+      return null;
+    }
+
+    // Get buildings assigned via site management
+    const managedSites = await this.siteRepo.find({
+      where: { manager_id: user.id },
+      relations: ['buildings'],
+    });
+    const siteBuildingIds = managedSites.flatMap(s => s.buildings?.map(b => b.id) || []);
+
+    // Get buildings explicitly assigned to the user
+    const assignments = await this.adminRepo.find({
+      where: { user: { id: user.id }, status: 'active' },
+      relations: ['building'],
+    });
+    const directBuildingIds = assignments.map(a => a.building?.id);
+
+    const allBuildingIds = [...new Set([...siteBuildingIds, ...directBuildingIds])].filter(Boolean);
+    
+    // If user is a site_admin, prioritize the site assignment. 
+    // If they manage NO site but HAVE the site_admin role, they should see NOTHING.
+    if (roles.includes('site_admin')) {
+        return siteBuildingIds.length > 0 ? siteBuildingIds : ['00000000-0000-0000-0000-000000000000'];
+    }
+
+    return allBuildingIds.length > 0 ? allBuildingIds : ['00000000-0000-0000-0000-000000000000']; // Return dummy if none to ensure empty result
+  }
+
+  async getPeopleReport(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    
+    const tenantWhere: any = {};
+    const visitorWhere: any = {};
+    
+    if (buildingIds) {
+       tenantWhere.building = In(buildingIds);
+       visitorWhere.building = In(buildingIds);
+    }
+
     const tenants = await this.tenantRepo.find({
+      where: tenantWhere,
       relations: ['user'],
       take: 50,
     });
     const visitors = await this.visitorRepo.find({
+      where: visitorWhere,
       order: { check_in_time: 'DESC' },
       take: 50,
     });
     return { tenants, visitors };
   }
 
-  async getLeaseReport() {
+  async getLeaseReport(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = {};
+    if (buildingIds) {
+      where.unit = { building: { id: In(buildingIds) } };
+    }
+
     return this.leaseRepo.find({
+      where,
       relations: ['unit', 'unit.building', 'tenant'],
       order: { start_date: 'DESC' },
       take: 100,
     });
   }
 
-  async getPropertyReport() {
+  async getPropertyReport(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = {};
+    if (buildingIds) {
+      where.id = In(buildingIds);
+    }
+
     const buildings = await this.buildingRepo.find({
+      where,
       relations: ['units'],
     });
     
@@ -79,9 +142,15 @@ export class ReportsService {
     });
   }
 
-  async getOverduePenaltyReport() {
+  async getOverduePenaltyReport(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = { status: In([InvoiceStatus.OVERDUE, InvoiceStatus.PARTIAL]) };
+    if (buildingIds) {
+      where.unit = { building: { id: In(buildingIds) } };
+    }
+
     const overdueInvoices = await this.invoiceRepo.find({
-      where: { status: In([InvoiceStatus.OVERDUE, InvoiceStatus.PARTIAL]) },
+      where,
       relations: ['tenant', 'unit', 'lease'],
     });
 
@@ -106,14 +175,25 @@ export class ReportsService {
     });
   }
 
-  async getDetailedFinancials() {
+  async getDetailedFinancials(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const invoiceWhere: any = {};
+    const paymentWhere: any = {};
+    
+    if (buildingIds) {
+      invoiceWhere.unit = { building: { id: In(buildingIds) } };
+      paymentWhere.invoice = { unit: { building: { id: In(buildingIds) } } };
+    }
+
     const recentInvoices = await this.invoiceRepo.find({
+      where: invoiceWhere,
       order: { due_date: 'DESC' } as any,
       take: 20,
       relations: ['tenant'],
     });
     
     const recentPayments = await this.paymentRepo.find({
+      where: paymentWhere,
       order: { created_at: 'DESC' },
       take: 20,
       relations: ['invoice', 'invoice.tenant'],
@@ -122,31 +202,43 @@ export class ReportsService {
     return { recentInvoices, recentPayments };
   }
 
-  async dashboard() {
+  async dashboard(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = {};
+    if (buildingIds) {
+      where.building = { id: In(buildingIds) };
+    }
+
     // Occupancy rate
-    const totalUnits = await this.unitRepo.count();
+    const totalUnits = await this.unitRepo.count({ where });
     const occupiedUnits = await this.unitRepo.count({
-      where: { status: UnitStatus.OCCUPIED },
+      where: { ...where, status: UnitStatus.OCCUPIED },
     });
     const occupiedLeases = await this.leaseRepo.count({
-      where: { status: LeaseStatus.ACTIVE },
+      where: { unit: (where.building && buildingIds) ? { building: { id: In(buildingIds) } } : {}, status: LeaseStatus.ACTIVE },
     });
     const occupancy =
       totalUnits === 0 ? 0 : (occupiedUnits / totalUnits) * 100;
 
     // Revenue: sum of paid payments
-    const revenueResult = await this.paymentRepo
+    const revenueQb = this.paymentRepo
       .createQueryBuilder('p')
       .select('COALESCE(SUM(p.amount),0)', 'total')
-      .where('p.status = :status', { status: 'confirmed' })
-      .getRawOne();
+      .where('p.status = :status', { status: 'confirmed' });
+    
+    if (buildingIds) {
+      revenueQb.innerJoin('p.invoice', 'i')
+               .innerJoin('i.unit', 'u')
+               .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+    const revenueResult = await revenueQb.getRawOne();
 
     const totalRevenue = Number(revenueResult.total || 0);
 
     // Maintenance KPIs: delegate to maintenance service if available
     let maintenanceKpis = { avgResolutionTime: 0, contractorStats: [] } as any;
     try {
-      maintenanceKpis = await this.maintenanceService.getDashboardKpis();
+      maintenanceKpis = await this.maintenanceService.getDashboardKpis(buildingIds || undefined);
     } catch (e) {
       // ignore if maintenance service not available
     }
@@ -162,14 +254,22 @@ export class ReportsService {
     };
   }
 
-  async financialTrend(months = 6) {
+  async financialTrend(months = 12, user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // Returns monthly sums for the past N months
     const qb = this.paymentRepo
       .createQueryBuilder('p')
       .select("to_char(p.created_at, 'YYYY-MM')", 'month')
       .addSelect('SUM(p.amount)', 'total')
-      .where('p.status = :status', { status: 'confirmed' })
-      .groupBy('month')
+      .where('p.status = :status', { status: 'confirmed' });
+
+    if (buildingIds) {
+       qb.innerJoin('p.invoice', 'i')
+         .innerJoin('i.unit', 'u')
+         .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+    
+    qb.groupBy('month')
       .orderBy('month', 'ASC')
       .limit(months);
 
@@ -177,16 +277,28 @@ export class ReportsService {
     return rows.map((r) => ({ month: r.month, total: Number(r.total) }));
   }
 
-  async occupancyInsights() {
+  async occupancyInsights(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = {};
+    if (buildingIds) {
+      where.building = { id: In(buildingIds) };
+    }
+
     // Vacant units and leases expiring soon
-    const totalUnits = await this.unitRepo.count();
+    const totalUnits = await this.unitRepo.count({ where });
     const occupiedUnits = await this.unitRepo.count({
-      where: { status: UnitStatus.OCCUPIED },
+      where: { ...where, status: UnitStatus.OCCUPIED },
     });
     const vacant = totalUnits - occupiedUnits;
-    const expiring = await this.leaseRepo
-      .createQueryBuilder('l')
-      .where('l.end_date BETWEEN :start AND :end', {
+
+    const expiryQb = this.leaseRepo.createQueryBuilder('l');
+    if (buildingIds) {
+       expiryQb.innerJoin('l.unit', 'u')
+               .where('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+
+    const expiring = await expiryQb
+      .andWhere('l.end_date BETWEEN :start AND :end', {
         start: new Date().toISOString().split('T')[0],
         end: new Date(new Date().setDate(new Date().getDate() + 30))
           .toISOString()
@@ -198,18 +310,24 @@ export class ReportsService {
     return { vacant_units: vacant, expiring_soon: expiring };
   }
 
-  async revenueDrilldown() {
+  async revenueDrilldown(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // Group revenue by Building
-    return this.paymentRepo
+    const qb = this.paymentRepo
       .createQueryBuilder('p')
       .select('b.name', 'building')
       .addSelect('SUM(p.amount)', 'total')
-      .innerJoin('p.lease', 'l')
+      .innerJoin('p.invoice', 'i')
+      .innerJoin('i.lease', 'l')
       .innerJoin('l.unit', 'u')
       .innerJoin('u.building', 'b')
-      .where('p.status = :status', { status: 'confirmed' })
-      .groupBy('b.name')
-      .getRawMany();
+      .where('p.status = :status', { status: 'confirmed' });
+
+    if (buildingIds) {
+      qb.andWhere('b.id IN (:...ids)', { ids: buildingIds });
+    }
+
+    return qb.groupBy('b.name').getRawMany();
   }
 
   async vacancyTrend() {
@@ -222,15 +340,21 @@ export class ReportsService {
     }));
   }
 
-  async overdueAging() {
+  async overdueAging(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = { status: InvoiceStatus.OVERDUE };
+    if (buildingIds) {
+      where.unit = { building: { id: In(buildingIds) } };
+    }
+
+    const invoices = await this.invoiceRepo.find({
+      where,
+    });
+
     const now = new Date();
     const day30 = new Date(new Date().setDate(now.getDate() - 30));
     const day60 = new Date(new Date().setDate(now.getDate() - 60));
     const day90 = new Date(new Date().setDate(now.getDate() - 90));
-
-    const invoices = await this.invoiceRepo.find({
-      where: { status: InvoiceStatus.OVERDUE },
-    });
 
     const report = {
       current: 0,
@@ -313,28 +437,40 @@ export class ReportsService {
     return readings.map(r => ({ month: r.month, consumption: Number(r.consumption) }));
   }
 
-  async generateCSV(type: string) {
+  async generateCSV(type: string, user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
+    const where: any = {};
+    if (buildingIds) {
+      where.id = In(buildingIds);
+    }
+
     let rawData: any[] = [];
     
     // 1. Fetch Data based on type
     if (type === 'buildings') {
-      rawData = await this.buildingRepo.find({ relations: ['site'] });
+      rawData = await this.buildingRepo.find({ where, relations: ['site'] });
     } else if (type === 'units') {
-      rawData = await this.unitRepo.find({ relations: ['building'] });
+      const unitWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
+      rawData = await this.unitRepo.find({ where: unitWhere, relations: ['building'] });
     } else if (type === 'tenants') {
-      rawData = await this.tenantRepo.find({ relations: ['user'] });
+      const tenantWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
+      rawData = await this.tenantRepo.find({ where: tenantWhere, relations: ['user'] });
     } else if (type === 'leases') {
-      rawData = await this.leaseRepo.find({ relations: ['unit', 'tenant'] });
+      const leaseWhere: any = buildingIds ? { unit: { building: { id: In(buildingIds) } } } : {};
+      rawData = await this.leaseRepo.find({ where: leaseWhere, relations: ['unit', 'tenant'] });
     } else if (type === 'payments') {
-      rawData = await this.paymentRepo.find({ relations: ['invoice', 'invoice.tenant'] });
+      const payWhere: any = buildingIds ? { invoice: { unit: { building: { id: In(buildingIds) } } } } : {};
+      rawData = await this.paymentRepo.find({ where: payWhere, relations: ['invoice', 'invoice.tenant'] });
     } else if (type === 'invoices') {
-      rawData = await this.invoiceRepo.find({ relations: ['tenant'] });
+      const invWhere: any = buildingIds ? { unit: { building: { id: In(buildingIds) } } } : {};
+      rawData = await this.invoiceRepo.find({ where: invWhere, relations: ['tenant'] });
     } else if (type === 'visitors') {
-      rawData = await this.visitorRepo.find();
+      const visWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
+      rawData = await this.visitorRepo.find({ where: visWhere });
     } else if (type === 'revenue') {
-      rawData = await this.revenueDrilldown();
+      rawData = await this.revenueDrilldown(user);
     } else if (type === 'overdue') {
-      rawData = await this.getOverduePenaltyReport();
+      rawData = await this.getOverduePenaltyReport(user);
     }
 
     if (!rawData || rawData.length === 0) return 'No data available for export';
@@ -429,48 +565,67 @@ export class ReportsService {
 
   // --- ADVANCED ANALYTICS FOR GRAPHS ---
 
-  async getFinanceAnalytics() {
+  async getFinanceAnalytics(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // 1. Revenue by Category (Rent, Utility, etc.)
-    const categoryRevenue = await this.invoiceItemRepo
+    const categoryQb = this.invoiceItemRepo
       .createQueryBuilder('ii')
       .select('ii.type', 'category')
       .addSelect('SUM(ii.amount)', 'total')
-      .groupBy('ii.type')
-      .getRawMany();
+      .innerJoin('ii.invoice', 'i')
+      .groupBy('ii.type');
+
+    if (buildingIds) {
+       categoryQb.andWhere('i.unitId IN (SELECT id FROM units WHERE building_id IN (:...ids))', { ids: buildingIds });
+    }
+    const categoryRevenue = await categoryQb.getRawMany();
 
     // 2. Collection Efficiency (Invoiced vs Paid)
-    const totalInvoiced = await this.invoiceRepo
+    const invoicedQb = this.invoiceRepo
       .createQueryBuilder('i')
       .select('SUM(i.total_amount)', 'total')
-      .where('i.status != :status', { status: InvoiceStatus.DRAFT })
-      .getRawOne();
+      .where('i.status != :status', { status: InvoiceStatus.DRAFT });
     
-    const totalPaid = await this.paymentRepo
+    const paidQb = this.paymentRepo
       .createQueryBuilder('p')
       .select('SUM(p.amount)', 'total')
-      .where('p.status = :status', { status: 'confirmed' })
-      .getRawOne();
+      .where('p.status = :status', { status: 'confirmed' });
+
+    if (buildingIds) {
+       invoicedQb.andWhere('i.unitId IN (SELECT id FROM units WHERE building_id IN (:...ids))', { ids: buildingIds });
+       paidQb.innerJoin('p.invoice', 'inv')
+             .innerJoin('inv.unit', 'u')
+             .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+
+    const totalInvoiced = await invoicedQb.getRawOne();
+    const totalPaid = await paidQb.getRawOne();
 
     return {
       categoryRevenue: categoryRevenue.map(r => ({ name: r.category, value: Number(r.total) })),
       efficiency: [
-        { name: 'Paid', value: Number(totalPaid.total || 0) },
-        { name: 'Outstanding', value: Math.max(0, Number(totalInvoiced.total || 0) - Number(totalPaid.total || 0)) },
+        { name: 'Paid', value: Number(totalPaid?.total || 0) },
+        { name: 'Outstanding', value: Math.max(0, Number(totalInvoiced?.total || 0) - Number(totalPaid?.total || 0)) },
       ]
     };
   }
 
-  async getPropertyAnalytics() {
+  async getPropertyAnalytics(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // 1. Occupancy mix by Unit Type
-    const typeDistribution = await this.unitRepo
+    const qb = this.unitRepo
       .createQueryBuilder('u')
       .select('u.type', 'type')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('u.type')
-      .getRawMany();
+      .addSelect('COUNT(*)', 'count');
+
+    if (buildingIds) {
+      qb.where('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+
+    const typeDistribution = await qb.groupBy('u.type').getRawMany();
 
     // 2. Building Performance Comparison
-    const buildingPerformance = await this.getPropertyReport();
+    const buildingPerformance = await this.getPropertyReport(user);
 
     return {
       unitMix: typeDistribution.map(d => ({ name: d.type, value: parseInt(d.count) })),
@@ -478,13 +633,20 @@ export class ReportsService {
     };
   }
 
-  async getLeaseAnalytics() {
+  async getLeaseAnalytics(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // 1. Lease Activity (Starts per month)
-    const starts = await this.leaseRepo
+    const qb = this.leaseRepo
       .createQueryBuilder('l')
       .select("to_char(l.start_date, 'YYYY-MM')", 'month')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('month')
+      .addSelect('COUNT(*)', 'count');
+
+    if (buildingIds) {
+      qb.innerJoin('l.unit', 'u')
+        .where('u.building_id IN (:...ids)', { ids: buildingIds });
+    }
+
+    const starts = await qb.groupBy('month')
       .orderBy('month', 'ASC')
       .getRawMany();
 
@@ -492,12 +654,17 @@ export class ReportsService {
     const today = new Date();
     const sixMonthsLater = new Date(new Date().setMonth(today.getMonth() + 6));
     
-    const expirations = await this.leaseRepo
-      .find({
-        where: {
-          end_date: Between(today.toISOString().split('T')[0], sixMonthsLater.toISOString().split('T')[0]),
-          status: LeaseStatus.ACTIVE
-        },
+    const leaseWhere: any = {
+      end_date: Between(today.toISOString().split('T')[0], sixMonthsLater.toISOString().split('T')[0]),
+      status: LeaseStatus.ACTIVE
+    };
+
+    if (buildingIds) {
+      leaseWhere.unit = { building: { id: In(buildingIds) } };
+    }
+
+    const expirations = await this.leaseRepo.find({
+        where: leaseWhere,
         relations: ['unit', 'tenant']
       });
 
@@ -512,17 +679,26 @@ export class ReportsService {
     };
   }
 
-  async getPeopleAnalytics() {
+  async getPeopleAnalytics(user?: any) {
+    const buildingIds = await this.getScopingCriteria(user);
     // 1. Visitor Traffic by Weekday
-    const traffic = await this.visitorRepo
+    const qb = this.visitorRepo
       .createQueryBuilder('v')
       .select("to_char(v.check_in_time, 'Day')", 'day')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('day')
-      .getRawMany();
+      .addSelect('COUNT(*)', 'count');
+
+    if (buildingIds) {
+      qb.where('v.building_id IN (:...ids)', { ids: buildingIds });
+    }
+
+    const traffic = await qb.groupBy('day').getRawMany();
 
     // 2. Tenant Tenure length distribution
-    const activeLeases = await this.leaseRepo.find({ where: { status: LeaseStatus.ACTIVE } });
+    const leaseWhere: any = { status: LeaseStatus.ACTIVE };
+    if (buildingIds) {
+       leaseWhere.unit = { building: { id: In(buildingIds) } };
+    }
+    const activeLeases = await this.leaseRepo.find({ where: leaseWhere });
     const demographics = {
       'New (< 6M)': 0,
       'Stable (6M-1Y)': 0,

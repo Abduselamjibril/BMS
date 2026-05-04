@@ -57,4 +57,9 @@ export class CreateSiteDto {
   @IsString()
   @IsOptional()
   image_url?: string;
+
+  @ApiProperty({ required: false, description: 'Optional Site Admin assignment' })
+  @IsString()
+  @IsOptional()
+  manager_id?: string;
 }

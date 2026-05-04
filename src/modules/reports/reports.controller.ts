@@ -1,5 +1,5 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Query, Res, Req } from '@nestjs/common';
+import type { Response, Request } from 'express';
 import { ReportsService } from './reports.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Auth } from '../../common/decorators/auth.decorator';
@@ -21,8 +21,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
-  async dashboard() {
-    return this.reportsService.dashboard();
+  async dashboard(@Req() req: any) {
+    return this.reportsService.dashboard(req.user);
   }
 
   @Get('financial')
@@ -30,8 +30,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
-  async financial() {
-    return this.reportsService.financialTrend(12);
+  async financial(@Req() req: any) {
+    return this.reportsService.financialTrend(12, req.user);
   }
 
   @Get('occupancy')
@@ -39,8 +39,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async occupancy() {
-    return this.reportsService.occupancyInsights();
+  async occupancy(@Req() req: any) {
+    return this.reportsService.occupancyInsights(req.user);
   }
 
   @Get('drilldown')
@@ -48,8 +48,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:revenue')
-  async drilldown() {
-    return this.reportsService.revenueDrilldown();
+  async drilldown(@Req() req: any) {
+    return this.reportsService.revenueDrilldown(req.user);
   }
 
   @Get('vacancy-trend')
@@ -66,8 +66,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
-  async overdueAging() {
-    return this.reportsService.overdueAging();
+  async overdueAging(@Req() req: any) {
+    return this.reportsService.overdueAging(req.user);
   }
 
   @Get('maintenance-analytics')
@@ -84,8 +84,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async turnover() {
-    return this.reportsService.getTurnoverRate();
+  async turnover(@Req() req: any) {
+    return this.reportsService.getTurnoverRate(); // Turnover is usually global, but I'll skip for now or add if needed
   }
 
   @Get('tenancy-duration')
@@ -111,8 +111,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async peopleReport() {
-    return this.reportsService.getPeopleReport();
+  async peopleReport(@Req() req: any) {
+    return this.reportsService.getPeopleReport(req.user);
   }
 
   @Get('leases')
@@ -120,8 +120,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async leaseReport() {
-    return this.reportsService.getLeaseReport();
+  async leaseReport(@Req() req: any) {
+    return this.reportsService.getLeaseReport(req.user);
   }
 
   @Get('properties')
@@ -129,8 +129,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async propertyReport() {
-    return this.reportsService.getPropertyReport();
+  async propertyReport(@Req() req: any) {
+    return this.reportsService.getPropertyReport(req.user);
   }
 
   @Get('overdue-details')
@@ -138,8 +138,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
-  async overdueDetails() {
-    return this.reportsService.getOverduePenaltyReport();
+  async overdueDetails(@Req() req: any) {
+    return this.reportsService.getOverduePenaltyReport(req.user);
   }
 
   @Get('detailed-financials')
@@ -147,8 +147,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
-  async detailedFinancials() {
-    return this.reportsService.getDetailedFinancials();
+  async detailedFinancials(@Req() req: any) {
+    return this.reportsService.getDetailedFinancials(req.user);
   }
 
   @Get('finance-analytics')
@@ -156,8 +156,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:financial')
-  async financeAnalytics() {
-    return this.reportsService.getFinanceAnalytics();
+  async financeAnalytics(@Req() req: any) {
+    return this.reportsService.getFinanceAnalytics(req.user);
   }
 
   @Get('property-analytics')
@@ -165,8 +165,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async propertyAnalytics() {
-    return this.reportsService.getPropertyAnalytics();
+  async propertyAnalytics(@Req() req: any) {
+    return this.reportsService.getPropertyAnalytics(req.user);
   }
 
   @Get('lease-analytics')
@@ -174,8 +174,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async leaseAnalytics() {
-    return this.reportsService.getLeaseAnalytics();
+  async leaseAnalytics(@Req() req: any) {
+    return this.reportsService.getLeaseAnalytics(req.user);
   }
 
   @Get('people-analytics')
@@ -183,8 +183,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:occupancy')
-  async peopleAnalytics() {
-    return this.reportsService.getPeopleAnalytics();
+  async peopleAnalytics(@Req() req: any) {
+    return this.reportsService.getPeopleAnalytics(req.user);
   }
 
   @Get('export')
@@ -192,8 +192,8 @@ export class ReportsController {
   @Roles('super_admin', 'admin', 'site_admin', 'finance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Permissions('reports:dashboard')
-  async export(@Query('type') type: string, @Res() res: Response) {
-    const csv = await this.reportsService.generateCSV(type);
+  async export(@Query('type') type: string, @Req() req: any, @Res() res: Response) {
+    const csv = await this.reportsService.generateCSV(type, req.user);
     res.header('Content-Type', 'text/csv');
     res.attachment(`${type}_report_${new Date().getTime()}.csv`);
     return res.send(csv);

@@ -75,8 +75,8 @@ export class MaintenanceController {
   @Get('work-orders')
   @ApiOperation({ summary: 'List all work orders with relations' })
   @ApiResponse({ status: 200, description: 'Work orders list.' })
-  async getWorkOrders() {
-    return this.maintenanceService.getWorkOrders();
+  async getWorkOrders(@Req() req: any) {
+    return this.maintenanceService.getWorkOrders(req.user);
   }
 
   @Get('requests')

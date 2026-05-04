@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Building } from './entities/building.entity';
 import { CreateBuildingDto } from './dto/create-building.dto';
 import { Unit } from '../units/entities/unit.entity';
@@ -54,15 +54,35 @@ export class BuildingsService {
     return this.buildingRepository.save(building);
   }
 
-  async findAll(userId?: string, role?: string): Promise<Building[]> {
-    if (role === 'nominee_admin' && userId) {
+  async findAll(userId?: string, roles: string[] = []): Promise<Building[]> {
+    if ((roles.includes('nominee_admin') || roles.includes('site_admin')) && userId) {
       const assignments = await this.adminAssignmentRepo.find({
         where: { user: { id: userId } },
         relations: ['building'],
       });
-      return assignments.map((a) => a.building);
+      
+      // Also get buildings from sites managed by this user
+      const managedSites = await this.siteRepository.find({
+        where: { manager_id: userId },
+        relations: ['buildings'],
+      });
+      const siteBuildingIds = managedSites.flatMap(s => s.buildings?.map(b => b.id) || []);
+      const directBuildingIds = assignments.map((a) => a.building.id);
+      
+      const allIds = [...new Set([...siteBuildingIds, ...directBuildingIds])];
+      
+      if (allIds.length === 0) return [];
+      
+      return this.buildingRepository.find({
+        where: { id: In(allIds) }
+      });
     }
-    return this.buildingRepository.find();
+    
+    if (roles.includes('super_admin') || roles.includes('admin')) {
+      return this.buildingRepository.find();
+    }
+
+    return this.buildingRepository.find(); // Default to all if no scoping matches yet
   }
 
   async findOne(id: string): Promise<Building> {

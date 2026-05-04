@@ -34,8 +34,8 @@ export class BuildingsController {
   @Permissions('buildings:read')
   findAll(@Request() req) {
     const userId = req.user?.id;
-    const role = req.user?.role || null;
-    return this.buildingsService.findAll(userId, role);
+    const roles = req.user?.roles || [];
+    return this.buildingsService.findAll(userId, roles);
   }
 
   @Get(':id')

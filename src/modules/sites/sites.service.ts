@@ -23,14 +23,14 @@ export class SitesService {
   }
 
   async findAll(): Promise<Site[]> {
-    return this.siteRepo.find({ relations: ['buildings'] });
+    return this.siteRepo.find({ relations: ['buildings', 'manager'] });
   }
 
   async findOne(id: string): Promise<Site | null> {
     // Note: Use "id: id as any" if your Entity ID is a number but your param is a string
     return this.siteRepo.findOne({
       where: { id: id as any },
-      relations: ['buildings'],
+      relations: ['buildings', 'manager'],
     });
   }
 

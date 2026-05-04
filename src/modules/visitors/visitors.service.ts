@@ -77,7 +77,7 @@ export class VisitorsService {
               user: { id: authenticatedUser.id || authenticatedUser.sub },
             },
           });
-          const tenantUnitIds = await this.getTenantUnitIds(tenant?.id || '');
+          const tenantUnitIds = tenant?.id ? await this.getTenantUnitIds(tenant.id) : [];
           if (!tenantUnitIds.includes(dto.unit_id)) {
             throw new ForbiddenException(
               'You can only check-in visitors for your own unit',
@@ -155,11 +155,16 @@ export class VisitorsService {
       const tenant = await this.tenantRepo.findOne({
         where: { user: { id: userId } },
       });
-      const unitIds = await this.getTenantUnitIds(tenant?.id || '');
+      
+      let unitIds: string[] = [];
+      if (tenant?.id) {
+        unitIds = await this.getTenantUnitIds(tenant.id);
+      }
+      
       return this.visitorRepo.find({
         where: [
           { host_user_id: userId },
-          { unit_id: In(unitIds.length ? unitIds : ['none']) as any },
+          { unit_id: In(unitIds.length ? unitIds : ['00000000-0000-0000-0000-000000000000']) as any },
         ],
       });
     }
@@ -180,7 +185,7 @@ export class VisitorsService {
         const tenant = await this.tenantRepo.findOne({
           where: { user: { id: userId } },
         });
-        const unitIds = await this.getTenantUnitIds(tenant?.id || '');
+        const unitIds = tenant?.id ? await this.getTenantUnitIds(tenant.id) : [];
         if (v.host_user_id !== userId && !unitIds.includes(v.unit_id as any)) {
           throw new ForbiddenException('Access denied');
         }
