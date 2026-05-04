@@ -32,6 +32,7 @@ async function bootstrap() {
     { name: 'contractor', description: 'Contractor', type: 'system' },
     { name: 'tenant', description: 'Default Tenant Role', type: 'system' },
     { name: 'finance', description: 'Finance Controller', type: 'system' },
+    { name: 'owner', description: 'Building Owner', type: 'system' },
   ];
   // Ensure Postgres enum type contains our role names (safe: ignore errors)
   try {
@@ -342,6 +343,62 @@ async function bootstrap() {
       }
       console.log('Mapped default finance permissions');
     }
+
+    // Map permissions for owner role
+    const ownerRoleSeed = await roleRepo.findOne({ where: { name: 'owner' } });
+    if (ownerRoleSeed) {
+      const ownerPermCodes = [
+        // Property (read)
+        'owners:read',
+        'buildings:read',
+        'units:read',
+        'sites:read',
+        'assets:read',
+        'amenities:read',
+        // People
+        'tenants:read',
+        'visitors:read',
+        'visitors:create',
+        // Leases
+        'leases:create',
+        'leases:activate',
+        'leases:terminate',
+        'leases:renew',
+        // Finance
+        'finance:invoices:create',
+        'finance:invoices:all',
+        'finance:payments:verify',
+        'finance:reports:revenue',
+        'finance:reports:tax',
+        'finance:bank_accounts:create',
+        'finance:invoices:generate',
+        // Reports
+        'reports:view',
+        'reports:dashboard',
+        'reports:financial',
+        'reports:occupancy',
+        // Maintenance (read-only)
+        'maintenance:requests:read',
+        'maintenance:reports:read',
+        // Utilities (read-only)
+        'utilities:meters:read',
+        'utilities:readings:read',
+        // Documents (read-only)
+        'documents:history',
+        'documents:search',
+        // Misc
+        'messages:send',
+        'announcements:create',
+      ];
+      for (const code of ownerPermCodes) {
+        const p = allPerms.find((x) => x.code === code);
+        if (p) {
+          const exists = await rolePermRepo.findOne({ where: { role: { id: ownerRoleSeed.id }, permission: { id: p.id } } });
+          if (!exists) await rolePermRepo.save({ role: ownerRoleSeed, permission: p });
+        }
+      }
+      console.log('Mapped default owner permissions');
+    }
   } catch (e) {
     console.warn('Could not map role permissions:', getErrorMessage(e));
   }
@@ -377,6 +434,7 @@ async function bootstrap() {
     { name: 'Contractor User', email: 'contractor@example.com', password: 'Password123!', roleSlug: 'contractor' },
     { name: 'Tenant User', email: 'tenant@example.com', password: 'Password123!', roleSlug: 'tenant' },
     { name: 'Finance Controller', email: 'finance@example.com', password: 'Password123!', roleSlug: 'finance' },
+    { name: 'Building Owner', email: 'owner@example.com', password: 'Password123!', roleSlug: 'owner' },
   ];
 
   for (const extra of extraUsers) {

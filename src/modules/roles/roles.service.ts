@@ -23,9 +23,9 @@ export class RolesService {
   ) {}
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
-    if (createRoleDto.name === 'super_admin') {
+    if (createRoleDto.name === 'super_admin' || createRoleDto.name === 'owner') {
       throw new ConflictException(
-        'The super_admin role is system-protected and cannot be created manually.',
+        `The ${createRoleDto.name} role is system-protected and cannot be created manually.`,
       );
     }
     const exists = await this.roleRepository.findOne({
@@ -68,8 +68,8 @@ export class RolesService {
   async update(id: string, dto: Partial<CreateRoleDto>): Promise<Role> {
     const roleToUpdate = await this.roleRepository.findOne({ where: { id } });
     if (!roleToUpdate) throw new NotFoundException('Role not found');
-    if (roleToUpdate.name === 'super_admin') {
-      throw new ConflictException('The super_admin role cannot be modified.');
+    if (roleToUpdate.name === 'super_admin' || roleToUpdate.name === 'owner') {
+      throw new ConflictException(`The ${roleToUpdate.name} role cannot be modified.`);
     }
     await this.roleRepository.update(id, dto);
     const updated = await this.roleRepository.findOne({ where: { id } });
@@ -84,8 +84,8 @@ export class RolesService {
       relations: ['userRoles'],
     });
     if (!role) return { message: 'Role not found or already deleted.' };
-    if (role.name === 'super_admin') {
-      throw new ConflictException('The super_admin role cannot be deleted.');
+    if (role.name === 'super_admin' || role.name === 'owner') {
+      throw new ConflictException(`The ${role.name} role cannot be deleted.`);
     }
     if (role.userRoles && role.userRoles.length > 0) {
       throw new ConflictException('Cannot delete role: users are assigned');
@@ -97,9 +97,9 @@ export class RolesService {
   async assignPermissions(roleId: string, dto: AssignPermissionsDto) {
     const role = await this.roleRepository.findOne({ where: { id: roleId } });
     if (!role) throw new NotFoundException('Role not found');
-    if (role.name === 'super_admin') {
+    if (role.name === 'super_admin' || role.name === 'owner') {
       throw new ConflictException(
-        'The super_admin role has implicit access to all permissions and cannot be modified.',
+        `The ${role.name} role has implicit access to all permissions and cannot be modified.`,
       );
     }
     await this.rolePermissionRepository.delete({ role: { id: roleId } });
