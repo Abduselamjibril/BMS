@@ -9,6 +9,7 @@ export enum CommissionPaymentStatus {
 
 @Entity('commission_payments')
 @Index('idx_commpay_status', ['status'])
+@Index('idx_payment_date', ['payment_date'])
 export class CommissionPayment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

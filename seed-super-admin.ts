@@ -151,6 +151,10 @@ async function bootstrap() {
     { code: 'finance:invoices:generate', description: 'Trigger invoice generation' },
     { code: 'finance:reports:revenue', description: 'View revenue reports' },
     { code: 'finance:reports:tax', description: 'View tax reports' },
+    { code: 'finance:analytics:read', description: 'Read finance analytics' },
+    { code: 'finance:deposit_advice:read', description: 'Read deposit advice list' },
+    { code: 'finance:deposit_advice:verify', description: 'Verify deposit advice' },
+    { code: 'finance:ledger:read', description: 'Read financial ledger' },
     // Documents
     { code: 'documents:delete', description: 'Soft delete documents' },
     { code: 'documents:history', description: 'View document version history' },
@@ -178,10 +182,9 @@ async function bootstrap() {
 
   for (const p of permissionsToEnsure) {
     try {
-      const existingP = await permRepo.findOne({ where: { code: p.code } });
-      if (!existingP) {
+      const found = await permRepo.findOne({ where: { code: p.code } });
+      if (!found) {
         await permRepo.save(p);
-        console.log('Seeded permission:', p.code);
       }
     } catch (e) {
       console.warn('Could not seed permission:', p.code, getErrorMessage(e));
@@ -190,6 +193,7 @@ async function bootstrap() {
 
   // Map permissions to roles: super_admin gets all, admin gets most, site_admin scoped
   try {
+    // Refresh allPerms after creation
     const allPerms = await permRepo.find();
     const adminRole = await roleRepo.findOne({ where: { name: 'admin' } });
     const siteAdminRole = await roleRepo.findOne({ where: { name: 'site_admin' } });
@@ -348,10 +352,14 @@ async function bootstrap() {
     const ownerRoleSeed = await roleRepo.findOne({ where: { name: 'owner' } });
     if (ownerRoleSeed) {
       const ownerPermCodes = [
-        // Property (read)
+        // Property
+        'users:read',
         'owners:read',
         'buildings:read',
+        'buildings:update', // Allow owners to update their own building details
         'units:read',
+        'units:create',     // Allow owners to add units to their buildings
+        'units:update',
         'sites:read',
         'assets:read',
         'amenities:read',
@@ -362,9 +370,9 @@ async function bootstrap() {
         // Leases
         'leases:create',
         'leases:activate',
-        'leases:terminate',
         'leases:renew',
-        // Finance
+        'leases:terminate',
+        // Finance & Reports
         'finance:invoices:create',
         'finance:invoices:all',
         'finance:payments:verify',
@@ -372,11 +380,13 @@ async function bootstrap() {
         'finance:reports:tax',
         'finance:bank_accounts:create',
         'finance:invoices:generate',
-        // Reports
         'reports:view',
         'reports:dashboard',
         'reports:financial',
         'reports:occupancy',
+        'finance:analytics:read',
+        'finance:deposit_advice:read',
+        'finance:ledger:read',
         // Maintenance (read-only)
         'maintenance:requests:read',
         'maintenance:reports:read',

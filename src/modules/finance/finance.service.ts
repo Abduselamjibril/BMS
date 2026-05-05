@@ -28,6 +28,8 @@ import { User } from '../users/entities/user.entity';
 import { ManagementAssignment, ManagementScope } from '../management/entities/management-assignment.entity';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 
 import { FinancePdfService } from './services/finance-pdf.service';
 import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
@@ -54,6 +56,8 @@ export class FinanceService {
     private readonly userRoleRepo: Repository<UserRole>,
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
     @InjectQueue('monthly-invoice')
     private readonly monthlyInvoiceQueue: Queue,
     @InjectQueue('overdue-penalty')
@@ -75,7 +79,21 @@ export class FinanceService {
     return this.bankAccountRepo.save(account);
   }
 
-  async getBankAccounts() {
+  async getBankAccounts(authenticatedUser?: any) {
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('owner')) {
+        // For now, owners see all bank accounts as they are global, 
+        // but we could filter if we add ownerId to BankAccount entity later.
+        return this.bankAccountRepo.find();
+      }
+    }
     return this.bankAccountRepo.find();
   }
 
@@ -128,6 +146,10 @@ export class FinanceService {
         });
         if (!tenant) return [];
         qb.andWhere('tenant.id = :tid', { tid: tenant.id });
+      } else if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (!owner) return [];
+        qb.andWhere('unit.building.ownerId = :oid', { oid: owner.id });
       } else if (roleNames.includes('nominee_admin')) {
         const buildingIds: string[] = [];
         const unitIds: string[] = [];
@@ -543,6 +565,10 @@ export class FinanceService {
         });
         if (!tenant) return [];
         qb.andWhere('tenant.id = :tid', { tid: tenant.id });
+      } else if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (!owner) return [];
+        qb.andWhere('unit.building.ownerId = :oid', { oid: owner.id });
       } else if (roleNames.includes('nominee_admin')) {
         // Apply similar scoping logic as in getInvoices if needed
         // For now, assume global access for simple admins or filter by building
@@ -765,13 +791,32 @@ export class FinanceService {
   /**
    * REPORTING
    */
-  async getRevenueReport(params: { building_id?: string; month?: string }) {
+  async getRevenueReport(params: { building_id?: string; month?: string; authenticatedUser?: any }) {
     const qb = this.paymentRepo.createQueryBuilder('p')
       .innerJoin('p.invoice', 'inv')
       .innerJoin('inv.unit', 'u')
       .select('u.building_id', 'building_id')
       .addSelect('SUM(p.amount)', 'total_revenue')
       .where('p.status = :status', { status: 'confirmed' });
+
+    if (params.authenticatedUser) {
+      const currentUserId = params.authenticatedUser.id || params.authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (owner) {
+          qb.innerJoin('u.building', 'b_owner')
+            .andWhere('b_owner.ownerId = :oid', { oid: owner.id });
+        } else {
+          return [];
+        }
+      }
+    }
 
     if (params.building_id) qb.andWhere('u.building_id = :bid', { bid: params.building_id });
     if (params.month) qb.andWhere('EXTRACT(MONTH FROM p.created_at) = :m', { m: params.month });
@@ -818,9 +863,27 @@ export class FinanceService {
     return updated;
   }
 
-  async getExpenses(params: { building_id?: string; category?: string; start_date?: string; end_date?: string }) {
+  async getExpenses(params: { building_id?: string; category?: string; start_date?: string; end_date?: string; authenticatedUser?: any }) {
     const qb = this.expenseRepo.createQueryBuilder('e')
       .leftJoinAndSelect('e.building', 'b');
+
+    if (params.authenticatedUser) {
+      const currentUserId = params.authenticatedUser.id || params.authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (owner) {
+          qb.andWhere('b.ownerId = :oid', { oid: owner.id });
+        } else {
+          return [];
+        }
+      }
+    }
     
     if (params.building_id) qb.andWhere('e.building_id = :bid', { bid: params.building_id });
     if (params.category) qb.andWhere('e.category = :c', { c: params.category });
@@ -838,7 +901,31 @@ export class FinanceService {
   }
 
   // --- Profit & Loss ---
-  async getPandLReport(params: { building_id?: string; year?: number; month?: number }) {
+  async getPandLReport(params: { building_id?: string; year?: number; month?: number; authenticatedUser?: any }) {
+    let ownerBuildingIds: string[] = [];
+    if (params.authenticatedUser) {
+      const currentUserId = params.authenticatedUser.id || params.authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (owner) {
+          const buildings = await this.dataSource.getRepository(Building).find({
+            where: { owner: { id: owner.id } },
+            select: ['id'],
+          });
+          ownerBuildingIds = buildings.map(b => b.id);
+          if (ownerBuildingIds.length === 0) return { totalRevenue: 0, totalExpenses: 0, netProfit: 0, categoryBreakdown: [] };
+        } else {
+          return { totalRevenue: 0, totalExpenses: 0, netProfit: 0, categoryBreakdown: [] };
+        }
+      }
+    }
+
     // 1. Revenue (Confirmed Payments)
     const revQb = this.paymentRepo.createQueryBuilder('p')
       .innerJoin('p.invoice', 'inv')
@@ -846,6 +933,9 @@ export class FinanceService {
       .select('SUM(p.amount)', 'total')
       .where('p.status = :s', { s: 'confirmed' });
     
+    if (ownerBuildingIds.length > 0) {
+      revQb.andWhere('u.building_id IN (:...obids)', { obids: ownerBuildingIds });
+    }
     if (params.building_id) revQb.andWhere('u.building_id = :bid', { bid: params.building_id });
     if (params.year) revQb.andWhere('EXTRACT(YEAR FROM p.created_at) = :y', { y: params.year });
     if (params.month) revQb.andWhere('EXTRACT(MONTH FROM p.created_at) = :m', { m: params.month });
@@ -857,6 +947,9 @@ export class FinanceService {
     const expQb = this.expenseRepo.createQueryBuilder('e')
       .select('SUM(e.amount)', 'total');
     
+    if (ownerBuildingIds.length > 0) {
+      expQb.andWhere('e.building_id IN (:...obids)', { obids: ownerBuildingIds });
+    }
     if (params.building_id) expQb.andWhere('e.building_id = :bid', { bid: params.building_id });
     if (params.year) expQb.andWhere('EXTRACT(YEAR FROM e.date) = :y', { y: params.year });
     if (params.month) expQb.andWhere('EXTRACT(MONTH FROM e.date) = :m', { m: params.month });
@@ -869,6 +962,9 @@ export class FinanceService {
       .select('e.category', 'category')
       .addSelect('SUM(e.amount)', 'total');
     
+    if (ownerBuildingIds.length > 0) {
+      catQb.andWhere('e.building_id IN (:...obids)', { obids: ownerBuildingIds });
+    }
     if (params.building_id) catQb.andWhere('e.building_id = :bid', { bid: params.building_id });
     if (params.year) catQb.andWhere('EXTRACT(YEAR FROM e.date) = :y', { y: params.year });
     if (params.month) catQb.andWhere('EXTRACT(MONTH FROM e.date) = :m', { m: params.month });
@@ -907,7 +1003,7 @@ export class FinanceService {
     return { status: 'queued', job: 'monthly-invoice' };
   }
 
-  async getTaxReport(params: { month?: string }) {
+  async getTaxReport(params: { month?: string; authenticatedUser?: any }) {
     const settings = await this.settingsRepo.findOne({ where: {} });
     const withholdingRate = settings ? Number(settings.withholding_rate) : 0.02;
 

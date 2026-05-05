@@ -3,11 +3,13 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Building } from './entities/building.entity';
 import { CreateBuildingDto } from './dto/create-building.dto';
+import { UpdateBuildingDto } from './dto/update-building.dto';
 import { Unit } from '../units/entities/unit.entity';
 import { BuildingAdminAssignment } from './entities/building-admin-assignment.entity';
 import { User } from '../users/entities/user.entity';
@@ -79,55 +81,71 @@ export class BuildingsService {
     }
     
     if (roles.includes('super_admin') || roles.includes('admin')) {
-      return this.buildingRepository.find();
+      return this.buildingRepository.find({ relations: ['owner', 'site'] });
     }
 
-    return this.buildingRepository.find(); // Default to all if no scoping matches yet
+    if (roles.includes('owner') && userId) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: userId } } });
+      if (!owner) return [];
+      return this.buildingRepository.find({
+        where: { owner: { id: owner.id } },
+        relations: ['owner', 'site']
+      });
+    }
+
+    return this.buildingRepository.find({ relations: ['owner', 'site'] });
   }
 
-  async findOne(id: string): Promise<Building> {
-    const building = await this.buildingRepository.findOne({ where: { id } });
+  async findOne(id: string, userId?: string, roles: string[] = []): Promise<Building> {
+    const building = await this.buildingRepository.findOne({ 
+      where: { id },
+      relations: ['owner', 'site'] 
+    });
     if (!building) throw new NotFoundException('Building not found');
+
+    if (roles.includes('owner') && userId) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: userId } } });
+      if (!owner || building.owner.id !== owner.id) {
+        throw new ForbiddenException('You do not have access to this building');
+      }
+    }
+
     return building;
   }
 
   async update(
     id: string,
-    dto: Partial<CreateBuildingDto & { siteId?: string; ownerId?: string }>,
-  ): Promise<{ message: string; building?: Building }> {
-    const building = await this.buildingRepository.findOne({ where: { id } });
-    if (!building) throw new NotFoundException('Building not found');
+    dto: UpdateBuildingDto,
+    userId?: string,
+    roles: string[] = [],
+  ): Promise<Building> {
+    const building = await this.findOne(id, userId, roles);
 
     // Handle relations
-    const updatePayload: any = { ...dto };
     if (dto.siteId) {
       const site = await this.siteRepository.findOne({
         where: { id: dto.siteId },
       });
       if (!site) throw new NotFoundException('Site not found');
-      updatePayload.site = site;
-      delete updatePayload.siteId;
+      building.site = site;
     }
     if (dto.ownerId) {
       const owner = await this.ownerRepository.findOne({
         where: { id: dto.ownerId },
       });
       if (!owner) throw new NotFoundException('Owner not found');
-      updatePayload.owner = owner;
-      delete updatePayload.ownerId;
+      building.owner = owner;
     }
 
-    await this.buildingRepository.update(id, updatePayload);
-    const updated = await this.buildingRepository.findOne({ where: { id } });
-    return {
-      message: 'Building updated successfully.',
-      building: updated ?? undefined,
-    };
+    // Assign other fields
+    const { siteId, ownerId, ...rest } = dto;
+    Object.assign(building, rest);
+
+    return this.buildingRepository.save(building);
   }
 
-  async remove(id: string): Promise<{ message: string }> {
-    const building = await this.buildingRepository.findOne({ where: { id } });
-    if (!building) return { message: 'Building not found or already deleted.' };
+  async remove(id: string, userId?: string, roles: string[] = []): Promise<any> {
+    const building = await this.findOne(id, userId, roles);
     const units = await this.unitRepository.find({
       where: { building: { id } },
     });

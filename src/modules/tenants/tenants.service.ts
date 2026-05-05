@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { Lease } from '../leases/entities/lease.entity';
 import * as bcrypt from 'bcryptjs';
 import { Tenant, TenantStatus } from './entities/tenant.entity';
 import {
@@ -35,6 +36,7 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { Role } from '../roles/entities/role.entity';
 import { LeasesService } from '../leases/leases.service';
 // RoleName enum removed
+import { Owner } from '../owners/entities/owner.entity';
 
 @Injectable()
 export class TenantsService {
@@ -63,6 +65,9 @@ export class TenantsService {
     private readonly userRoleRepository: Repository<UserRole>,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    @InjectRepository(Owner)
+    private readonly ownerRepository: Repository<Owner>,
+    private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
     private readonly leasesService: LeasesService,
   ) { }
@@ -137,7 +142,7 @@ export class TenantsService {
     return this.tenantRepository.save(tenant);
   }
 
-  async findOne(id: string): Promise<Tenant> {
+  async findOne(id: string, userId?: string, roles: string[] = []): Promise<Tenant> {
     const tenant = await this.tenantRepository.findOne({
       where: { id },
       relations: ['user'],
@@ -145,6 +150,19 @@ export class TenantsService {
 
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
+    }
+
+    if (roles.includes('owner') && userId) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: userId } } });
+      if (owner) {
+        // Check if this tenant has any lease in owner's buildings
+        const hasLease = await this.dataSource.getRepository(Lease).findOne({
+          where: { tenant: { id: tenant.id }, unit: { building: { owner: { id: owner.id } } } }
+        });
+        if (!hasLease) {
+          throw new ForbiddenException('You do not have access to this tenant');
+        }
+      }
     }
 
     return tenant;
@@ -156,13 +174,40 @@ export class TenantsService {
       relations: ['role'],
     });
 
-    const allowedRoles = ['super_admin', 'admin', 'site_admin', 'contractor', 'tenant', 'nominee_admin'];
+    const allowedRoles = ['super_admin', 'admin', 'site_admin', 'contractor', 'tenant', 'nominee_admin', 'owner'];
     const isAllowed = roles.some((role) => allowedRoles.includes(role.role.name));
     if (!isAllowed) {
       throw new ForbiddenException('Insufficient permissions to view tenants');
     }
 
+    const isOwner = roles.some((role) => role.role.name === 'owner');
+    let where: any = {};
+
+    if (isOwner) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: currentUserId } } });
+      if (!owner) return [];
+
+      // Find all building IDs owned by this owner
+      const buildings = await this.buildingRepository.find({
+        where: { owner: { id: owner.id } },
+        select: ['id'],
+      });
+      const buildingIds = buildings.map((b) => b.id);
+      if (buildingIds.length === 0) return [];
+
+      // Find all tenants with active or draft leases in these buildings
+      const activeLeases = await this.leaseRepository.find({
+        where: { building: { id: In(buildingIds) } },
+        relations: ['tenant'],
+      });
+      const tenantIds = [...new Set(activeLeases.map((l) => l.tenant.id))];
+      if (tenantIds.length === 0) return [];
+
+      where = { id: In(tenantIds) };
+    }
+
     const tenants = await this.tenantRepository.find({
+      where,
       order: { created_at: 'DESC' },
     });
 
@@ -184,14 +229,8 @@ export class TenantsService {
     });
   }
 
-  async updateTenant(id: string, dto: Record<string, any>): Promise<Tenant> {
-    const tenant = await this.tenantRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    });
-    if (!tenant) {
-      throw new NotFoundException('Tenant not found');
-    }
+  async updateTenant(id: string, dto: Record<string, any>, userId?: string, roles: string[] = []): Promise<Tenant> {
+    const tenant = await this.findOne(id, userId, roles);
 
     if (dto.email && dto.email !== tenant.email) {
       const emailExists = await this.tenantRepository.findOne({

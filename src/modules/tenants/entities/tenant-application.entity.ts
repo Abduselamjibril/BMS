@@ -21,6 +21,9 @@ export enum TenantApplicationStatus {
 
 @Entity('tenant_applications')
 @Index('idx_tenantapp_status', ['status'])
+@Index('id_tenant_app', ['tenant'])
+@Index('id_building_app', ['building'])
+@Index('id_unit_app', ['unit'])
 export class TenantApplication {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

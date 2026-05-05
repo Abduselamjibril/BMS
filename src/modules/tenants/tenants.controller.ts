@@ -48,8 +48,10 @@ export class TenantsController {
 
   @Get('tenants/:id')
   @ApiOperation({ summary: 'Get a single tenant' })
-  async findOne(@Param('id') id: string) {
-    return this.tenantsService.findOne(id);
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.tenantsService.findOne(id, userId, roles);
   }
 
   @Get('tenants/my-lease')
@@ -67,8 +69,10 @@ export class TenantsController {
   @Patch('tenants/:id')
   @Permissions('tenants:update')
   @ApiOperation({ summary: 'Update a tenant profile' })
-  async updateTenant(@Param('id') id: string, @Body() dto: any) {
-    return this.tenantsService.updateTenant(id, dto);
+  async updateTenant(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.tenantsService.updateTenant(id, dto, userId, roles);
   }
 
   @Post('applications')

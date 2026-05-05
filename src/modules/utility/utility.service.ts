@@ -19,15 +19,37 @@ import { BuildingAdminAssignment } from '../buildings/entities/building-admin-as
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Lease, LeaseStatus } from '../leases/entities/lease.entity';
 import { In, DataSource } from 'typeorm';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Injectable()
 export class UtilityService {
   /**
    * Returns units/meters with abnormal consumption (e.g., >2x previous average)
    */
-  async getUtilityLeaks() {
-    // Find all meters
-    const meters = await this.meterRepo.find();
+  async getUtilityLeaks(authenticatedUser?: any) {
+    const userId = authenticatedUser?.id || authenticatedUser?.sub;
+    let ownerBuildingIds: string[] = [];
+
+    if (userId) {
+      const roles = await this.getUserRoles(userId);
+      if (roles.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+        if (owner) {
+          const buildings = await this.dataSource.getRepository(Building).find({
+            where: { owner: { id: owner.id } },
+            select: ['id'],
+          });
+          ownerBuildingIds = buildings.map(b => b.id);
+        }
+      }
+    }
+
+    // Find meters
+    const metersQb = this.meterRepo.createQueryBuilder('meter');
+    if (ownerBuildingIds.length > 0) {
+      metersQb.where('meter.building_id::text IN (:...bids)', { bids: ownerBuildingIds });
+    }
+    const meters = await metersQb.getMany();
     const leaks: Array<{
       meter_id: string;
       unit_id: string;
@@ -76,6 +98,8 @@ export class UtilityService {
     private readonly adminAssignmentRepo: Repository<BuildingAdminAssignment>,
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
     private readonly notificationsService: NotificationsService,
     private readonly dataSource: DataSource,
   ) {}
@@ -144,6 +168,17 @@ export class UtilityService {
       qb.andWhere('meter.unit_id::text IN (:...unitIds)', {
         unitIds: unitIds.length ? unitIds : ['none'],
       });
+    } else if (roles.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+      if (!owner) return [];
+      const buildings = await this.dataSource.getRepository(Building).find({
+        where: { owner: { id: owner.id } },
+        select: ['id'],
+      });
+      const buildingIds = buildings.map(b => b.id);
+      qb.andWhere('meter.building_id::text IN (:...buildingIds)', {
+        buildingIds: buildingIds.length ? buildingIds : ['none'],
+      });
     } else {
       return []; // Other roles see nothing
     }
@@ -170,9 +205,24 @@ export class UtilityService {
   }
 }
 
-  async findMeter(id: string) {
+  async findMeter(id: string, authenticatedUser?: any) {
     const m = await this.meterRepo.findOne({ where: { id } });
     if (!m) throw new NotFoundException('Meter not found');
+
+    if (authenticatedUser) {
+      const roles = await this.getUserRoles(authenticatedUser.id || authenticatedUser.sub);
+      if (roles.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authenticatedUser.id || authenticatedUser.sub } } });
+        if (owner && m.building_id !== owner.id) {
+           // wait, building_id is compared to owner.id? No, owner.id is for Owner entity.
+           // I need to check if building belongs to owner.
+           const building = await this.dataSource.getRepository(Building).findOne({
+             where: { id: m.building_id, owner: { id: owner.id } }
+           });
+           if (!building) throw new ForbiddenException('You do not have access to this meter');
+        }
+      }
+    }
     return m;
   }
 
@@ -300,6 +350,15 @@ export class UtilityService {
     }
 
     if (roles.includes('tenant')) {
+      const meters = await this.findMeters(authenticatedUser);
+      if (meters.length === 0) return [];
+      const meterIds = meters.map((m) => m.id);
+      return this.readingRepo.find({
+        where: { meter_id: In(meterIds) },
+      });
+    }
+
+    if (roles.includes('owner')) {
       const meters = await this.findMeters(authenticatedUser);
       if (meters.length === 0) return [];
       const meterIds = meters.map((m) => m.id);

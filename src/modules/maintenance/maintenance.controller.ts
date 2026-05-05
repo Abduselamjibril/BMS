@@ -97,8 +97,8 @@ export class MaintenanceController {
   @Get('schedules')
   @Permissions('maintenance:schedules:read')
   @ApiOperation({ summary: 'List maintenance schedules' })
-  async getSchedules(@Query('building_id') building_id?: string) {
-    return this.maintenanceService.getSchedules(building_id);
+  async getSchedules(@Query('building_id') building_id?: string, @Req() req?: any) {
+    return this.maintenanceService.getSchedules(building_id, req?.user);
   }
 
   @Patch('schedules/:id')
@@ -111,8 +111,8 @@ export class MaintenanceController {
   @Delete('schedules/:id')
   @Permissions('maintenance:schedules:delete')
   @ApiOperation({ summary: 'Delete a maintenance schedule' })
-  async deleteSchedule(@Param('id') id: string) {
-    return this.maintenanceService.deleteSchedule(id);
+  async deleteSchedule(@Param('id') id: string, @Req() req: any) {
+    return this.maintenanceService.deleteSchedule(id, req.user);
   }
 
   @Post('schedules/run-cron')
@@ -135,8 +135,9 @@ export class MaintenanceController {
   async updateRequest(
     @Param('id') id: string,
     @Body() dto: UpdateMaintenanceRequestDto,
+    @Req() req: any,
   ) {
-    return this.maintenanceService.updateRequest(id, dto);
+    return this.maintenanceService.updateRequest(id, dto, req.user);
   }
 
   @Post('work-orders')
@@ -258,7 +259,7 @@ export class MaintenanceController {
   @Permissions('maintenance:reports:read')
   @ApiOperation({ summary: 'Get maintenance KPIs and contractor performance' })
   @ApiResponse({ status: 200, description: 'Maintenance report.' })
-  async getMaintenanceReport(@Query() query: any) {
-    return this.maintenanceService.getDashboardKpis();
+  async getMaintenanceReport(@Req() req: any) {
+    return this.maintenanceService.getDashboardKpis(undefined, req.user);
   }
 }

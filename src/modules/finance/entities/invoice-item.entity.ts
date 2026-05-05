@@ -10,6 +10,7 @@ export enum InvoiceItemType {
 
 @Entity('invoice_items')
 @Index('idx_invitem_type', ['type'])
+@Index('idx_invoice', ['invoice', 'type', 'amount'])
 export class InvoiceItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

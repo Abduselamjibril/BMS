@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inspection } from './entities/inspections.entity';
@@ -6,6 +6,10 @@ import { InspectionStatus, InspectionType, ItemCondition } from './entities/insp
 import { InspectionItem } from './entities/inspections.entity';
 import { Lease, LeaseStatus } from '../leases/entities/lease.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
+
 
 @Injectable()
 export class InspectionsService {
@@ -18,6 +22,12 @@ export class InspectionsService {
     private leaseRepo: Repository<Lease>,
     @InjectRepository(Tenant)
     private tenantRepo: Repository<Tenant>,
+    @InjectRepository(UserRole)
+    private userRoleRepo: Repository<UserRole>,
+    @InjectRepository(Owner)
+    private ownerRepo: Repository<Owner>,
+    @InjectRepository(Building)
+    private buildingRepo: Repository<Building>,
   ) {}
 
   async createInspection(leaseId: string, type: InspectionType) {
@@ -63,12 +73,29 @@ export class InspectionsService {
     return this.getInspection(saved.id);
   }
 
-  async getInspection(id: string) {
+  async getInspection(id: string, authenticatedUser?: any) {
     const inspection = await this.inspectionRepo.findOne({
       where: { id },
-      relations: ['items', 'lease', 'lease.unit', 'lease.tenant'],
+      relations: ['items', 'lease', 'lease.unit', 'lease.unit.building', 'lease.unit.building.owner', 'lease.tenant'],
     });
     if (!inspection) throw new NotFoundException('Inspection not found');
+
+    if (authenticatedUser) {
+      const userId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: userId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+        if (!owner || inspection.lease.unit.building.owner.id !== owner.id) {
+          throw new ForbiddenException('You do not have access to this inspection');
+        }
+      }
+    }
+
     return inspection;
   }
 
@@ -93,9 +120,28 @@ export class InspectionsService {
     });
   }
 
-  async updateItem(itemId: string, dto: { condition?: ItemCondition; comment?: string; photos?: string[] }) {
-    const item = await this.itemRepo.findOne({ where: { id: itemId } });
+  async updateItem(itemId: string, dto: { condition?: ItemCondition; comment?: string; photos?: string[] }, authenticatedUser?: any) {
+    const item = await this.itemRepo.findOne({ 
+      where: { id: itemId },
+      relations: ['inspection', 'inspection.lease', 'inspection.lease.unit', 'inspection.lease.unit.building', 'inspection.lease.unit.building.owner']
+    });
     if (!item) throw new NotFoundException('Item not found');
+
+    if (authenticatedUser) {
+      const userId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: userId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+        if (!owner || item.inspection.lease.unit.building.owner.id !== owner.id) {
+          throw new ForbiddenException('You do not have access to this inspection item');
+        }
+      }
+    }
 
     if (dto.condition) item.condition = dto.condition;
     if (dto.comment !== undefined) item.comment = dto.comment;
@@ -104,8 +150,8 @@ export class InspectionsService {
     return this.itemRepo.save(item);
   }
 
-  async submitInspection(id: string, signatureUrl?: string, notes?: string) {
-    const inspection = await this.getInspection(id);
+  async submitInspection(id: string, signatureUrl?: string, notes?: string, authenticatedUser?: any) {
+    const inspection = await this.getInspection(id, authenticatedUser);
     if (inspection.status !== InspectionStatus.PENDING) {
       throw new BadRequestException('Inspection is not in PENDING status');
     }
@@ -118,7 +164,7 @@ export class InspectionsService {
   }
 
   async verifyInspection(id: string, admin: any) {
-    const inspection = await this.getInspection(id);
+    const inspection = await this.getInspection(id, admin);
     inspection.status = InspectionStatus.VERIFIED;
     inspection.verified_by = admin;
     inspection.verified_at = new Date();

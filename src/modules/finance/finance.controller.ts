@@ -220,8 +220,8 @@ export class FinanceController {
   @Get('bank-accounts')
   @ApiOperation({ summary: 'List all bank accounts' })
   @ApiResponse({ status: 200, description: 'Bank accounts list.' })
-  async getBankAccounts() {
-    return this.financeService.getBankAccounts();
+  async getBankAccounts(@Req() req: any) {
+    return this.financeService.getBankAccounts(req.user);
   }
 
   @Patch('bank-accounts/:id')
@@ -360,18 +360,19 @@ export class FinanceController {
   @ApiOperation({ summary: 'Get revenue report' })
   @ApiResponse({ status: 200, description: 'Revenue report.' })
   async getRevenueReport(
+    @Req() req: any,
     @Query('building_id') building_id?: string,
     @Query('month') month?: string,
   ) {
-    return this.financeService.getRevenueReport({ building_id, month });
+    return this.financeService.getRevenueReport({ building_id, month, authenticatedUser: req.user });
   }
 
   @Get('reports/tax')
   @Permissions('finance:reports:tax')
   @ApiOperation({ summary: 'Get tax compliance report' })
   @ApiResponse({ status: 200, description: 'Tax report.' })
-  async getTaxReport(@Query('month') month?: string) {
-    return this.financeService.getTaxReport({ month });
+  async getTaxReport(@Req() req: any, @Query('month') month?: string) {
+    return this.financeService.getTaxReport({ month, authenticatedUser: req?.user });
   }
 
   @Post('expenses')
@@ -387,12 +388,13 @@ export class FinanceController {
   @ApiOperation({ summary: 'List all expenses' })
   @ApiResponse({ status: 200, description: 'Expenses list.' })
   async getExpenses(
+    @Req() req: any,
     @Query('building_id') building_id?: string,
     @Query('category') category?: string,
     @Query('start_date') start_date?: string,
     @Query('end_date') end_date?: string,
   ) {
-    return this.financeService.getExpenses({ building_id, category, start_date, end_date });
+    return this.financeService.getExpenses({ building_id, category, start_date, end_date, authenticatedUser: req?.user });
   }
 
   @Get('reports/p-and-l')
@@ -403,7 +405,8 @@ export class FinanceController {
     @Query('building_id') building_id?: string,
     @Query('year') year?: number,
     @Query('month') month?: number,
+    @Req() req?: any,
   ) {
-    return this.financeService.getPandLReport({ building_id, year, month });
+    return this.financeService.getPandLReport({ building_id, year, month, authenticatedUser: req?.user });
   }
 }

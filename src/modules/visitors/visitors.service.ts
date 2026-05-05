@@ -18,6 +18,8 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Lease, LeaseStatus } from '../leases/entities/lease.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 
 @Injectable()
 export class VisitorsService {
@@ -36,6 +38,10 @@ export class VisitorsService {
     private readonly adminAssignmentRepo: Repository<BuildingAdminAssignment>,
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -151,6 +157,28 @@ export class VisitorsService {
         .getMany();
     }
 
+    if (roles.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+      if (!owner) return [];
+
+      const buildings = await this.buildingRepo.find({
+        where: { owner: { id: owner.id } },
+        select: ['id'],
+      });
+      const buildingIds = buildings.map((b) => b.id);
+      if (buildingIds.length === 0) return [];
+
+      return this.visitorRepo
+        .createQueryBuilder('visitor')
+        .where('visitor.unit_id::uuid IN (SELECT u.id FROM units u WHERE u.building_id IN (:...buildingIds))', {
+          buildingIds,
+        })
+        .orWhere('visitor.building_id::uuid IN (:...buildingIds)', {
+          buildingIds,
+        })
+        .getMany();
+    }
+
     if (roles.includes('tenant')) {
       const tenant = await this.tenantRepo.findOne({
         where: { user: { id: userId } },
@@ -188,6 +216,24 @@ export class VisitorsService {
         const unitIds = tenant?.id ? await this.getTenantUnitIds(tenant.id) : [];
         if (v.host_user_id !== userId && !unitIds.includes(v.unit_id as any)) {
           throw new ForbiddenException('Access denied');
+        }
+      }
+
+      if (roles.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+        if (owner) {
+          const buildings = await this.buildingRepo.find({ where: { owner: { id: owner.id } } });
+          const buildingIds = buildings.map(b => b.id);
+          
+          // Check if visitor's unit or building belongs to owner
+          const isOwnerAsset = await this.visitorRepo.createQueryBuilder('v')
+            .where('v.id = :id', { id: v.id })
+            .andWhere('(v.unit_id::uuid IN (SELECT u.id FROM units u WHERE u.building_id IN (:...bids)) OR v.building_id::uuid IN (:...bids))', { bids: buildingIds.length ? buildingIds : ['00000000-0000-0000-0000-000000000000'] })
+            .getCount();
+
+          if (!isOwnerAsset && v.host_user_id !== userId) {
+            throw new ForbiddenException('You do not have access to this visitor record');
+          }
         }
       }
 

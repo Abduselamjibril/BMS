@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { DataSource } from 'typeorm';
 import { Document, DocumentVersion } from './entities/document.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
@@ -10,6 +10,8 @@ import { Tenant } from '../tenants/entities/tenant.entity';
 import { Lease } from '../leases/entities/lease.entity';
 import { Payment } from '../finance/entities/payment.entity';
 import { UserBuilding } from '../users/entities/user-building.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 
 @Injectable()
 export class DocumentService {
@@ -22,6 +24,8 @@ export class DocumentService {
     private readonly userRoleRepo: Repository<UserRole>,
     @InjectRepository(Tenant)
     private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -36,7 +40,10 @@ export class DocumentService {
         where: { user: { id: authorId } },
         relations: ['role'],
       });
-      const isTenant = userRoles.some((ur) => ur.role.name === 'tenant');
+      const roleNames = userRoles.map((ur) => ur.role.name);
+      const isTenant = roleNames.includes('tenant');
+      const isOwner = roleNames.includes('owner');
+
       if (isTenant) {
         const tenant = await this.tenantRepo.findOne({
           where: { user: { id: authorId } },
@@ -44,6 +51,21 @@ export class DocumentService {
         if (tenant) {
           targetModuleId = tenant.id;
           targetModuleType = 'tenant';
+        }
+      } else if (isOwner) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authorId } } });
+        if (owner) {
+          // Verify target module ownership
+          if (targetModuleType === 'building') {
+            const building = await this.dataSource.getRepository(Building).findOne({ where: { id: targetModuleId, owner: { id: owner.id } } });
+            if (!building) throw new ForbiddenException('You do not have access to this building');
+          } else if (targetModuleType === 'lease') {
+            const lease = await this.dataSource.getRepository(Lease).findOne({ where: { id: targetModuleId, unit: { building: { owner: { id: owner.id } } } } });
+            if (!lease) throw new ForbiddenException('You do not have access to this lease');
+          } else if (targetModuleType === 'tenant') {
+            const hasLease = await this.dataSource.getRepository(Lease).findOne({ where: { tenant: { id: targetModuleId }, unit: { building: { owner: { id: owner.id } } } } });
+            if (!hasLease) throw new ForbiddenException('You do not have access to this tenant');
+          }
         }
       }
     }
@@ -145,7 +167,65 @@ export class DocumentService {
         });
       }
     }
-    // 3. Tenant: Filter by their own tenant ID, associated lease IDs, or payment IDs
+    // 3. Owner: Filter by owned buildings and related entities
+    else if (roleNames.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+      if (!owner) return [];
+
+      const buildings = await this.dataSource.getRepository(Building).find({
+        where: { owner: { id: owner.id } },
+        select: ['id'],
+      });
+      const buildingIds = buildings.map((b) => b.id);
+      if (buildingIds.length === 0) return [];
+
+      // Find all related entity IDs (leases, tenants, payments) in these buildings
+      const leases = await this.dataSource.getRepository(Lease).find({
+        where: { unit: { building: { id: In(buildingIds) } } },
+        relations: ['tenant'],
+        select: ['id'],
+      });
+      const leaseIds = leases.map(l => l.id);
+      const tenantIds = [...new Set(leases.map(l => l.tenant?.id).filter(Boolean))];
+
+      const payments = await this.dataSource.getRepository(Payment).find({
+        where: { invoice: { unit: { building: { id: In(buildingIds) } } } },
+        select: ['id'],
+      });
+      const paymentIds = payments.map(p => p.id);
+
+      const conditions: string[] = [];
+      const params: any = {};
+
+      // Building docs
+      conditions.push('(document.module_type = :bmt AND document.module_id IN (:...bids))');
+      params.bmt = 'building';
+      params.bids = buildingIds;
+
+      // Lease docs
+      if (leaseIds.length > 0) {
+        conditions.push('(document.module_type = :lmt AND document.module_id IN (:...lids))');
+        params.lmt = 'lease';
+        params.lids = leaseIds;
+      }
+
+      // Tenant docs
+      if (tenantIds.length > 0) {
+        conditions.push('(document.module_type = :tmt AND document.module_id IN (:...tids))');
+        params.tmt = 'tenant';
+        params.tids = tenantIds;
+      }
+
+      // Payment docs
+      if (paymentIds.length > 0) {
+        conditions.push('(document.module_type = :pmt AND document.module_id IN (:...pids))');
+        params.pmt = 'payment';
+        params.pids = paymentIds;
+      }
+
+      query.andWhere(`(${conditions.join(' OR ')})`, params);
+    }
+    // 4. Tenant: Filter by their own tenant ID, associated lease IDs, or payment IDs
     else if (roleNames.includes('tenant')) {
       const tenant = await this.tenantRepo.findOne({
         where: { user: { id: currentUserId } },
@@ -217,7 +297,9 @@ export class DocumentService {
     return enriched;
   }
 
-  async getDocumentHistory(id: string) {
+  async getDocumentHistory(id: string, authenticatedUser?: any) {
+    // We should verify access to the document first
+    await this.verifyDocumentAccess(id, authenticatedUser);
     // List all previous versions
     return this.versionRepo.find({
       where: { document_id: id },
@@ -225,7 +307,40 @@ export class DocumentService {
     });
   }
 
-  async softDeleteDocument(id: string) {
+  private async verifyDocumentAccess(id: string, authenticatedUser?: any) {
+    if (!authenticatedUser) return;
+    const userId = authenticatedUser.id || authenticatedUser.sub;
+    const userRoles = await this.userRoleRepo.find({
+      where: { user: { id: userId } },
+      relations: ['role'],
+    });
+    const roleNames = userRoles.map(r => r.role.name);
+
+    if (roleNames.includes('super_admin')) return;
+
+    const doc = await this.documentRepo.findOne({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+
+    if (roleNames.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: userId } } });
+      if (owner) {
+        if (doc.module_type === 'building') {
+          const b = await this.dataSource.getRepository(Building).findOne({ where: { id: doc.module_id, owner: { id: owner.id } } });
+          if (!b) throw new ForbiddenException('Access denied');
+        } else if (doc.module_type === 'lease') {
+          const l = await this.dataSource.getRepository(Lease).findOne({ where: { id: doc.module_id, unit: { building: { owner: { id: owner.id } } } } });
+          if (!l) throw new ForbiddenException('Access denied');
+        } else if (doc.module_type === 'tenant') {
+          const hasLease = await this.dataSource.getRepository(Lease).findOne({ where: { tenant: { id: doc.module_id }, unit: { building: { owner: { id: owner.id } } } } });
+          if (!hasLease) throw new ForbiddenException('Access denied');
+        }
+      }
+    }
+    // Tenant access logic can be added here if needed
+  }
+
+  async softDeleteDocument(id: string, authenticatedUser?: any) {
+    await this.verifyDocumentAccess(id, authenticatedUser);
     // Mark as is_deleted
     return this.documentRepo.update(id, { is_deleted: true });
   }

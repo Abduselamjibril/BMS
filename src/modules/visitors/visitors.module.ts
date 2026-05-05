@@ -9,11 +9,13 @@ import { Lease } from '../leases/entities/lease.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Visitor, Site, Unit, Lease, UserRole, BuildingAdminAssignment, Tenant]),
+    TypeOrmModule.forFeature([Visitor, Site, Unit, Lease, UserRole, BuildingAdminAssignment, Tenant, Owner, Building]),
     NotificationsModule,
   ],
   providers: [VisitorsService],

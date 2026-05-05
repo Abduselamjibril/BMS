@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
@@ -26,6 +27,8 @@ import { Expense } from '../finance/entities/expense.entity';
 import { ManagementAssignment, ManagementScope } from '../management/entities/management-assignment.entity';
 import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
 import { CommissionBasis } from '../commission/entities/commission-rule.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 
 @Injectable()
 export class MaintenanceService {
@@ -48,6 +51,10 @@ export class MaintenanceService {
     private readonly scheduleRepo: Repository<MaintenanceSchedule>,
     @InjectRepository(Expense)
     private readonly expenseRepo: Repository<Expense>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
     private readonly notificationsService: NotificationsService,
     private readonly commissionCalculationService: CommissionCalculationService,
   ) { }
@@ -139,8 +146,27 @@ export class MaintenanceService {
         .leftJoinAndSelect('tenant.user', 'user')
         .leftJoinAndSelect('request.unit', 'unit')
         .leftJoinAndSelect('request.feedbacks', 'feedbacks')
-        .where('contractor.id = :cid', { cid: contractor.id })
+        .andWhere('contractor.id = :cid', { cid: contractor.id })
         .getMany();
+    }
+
+    if (roleNames.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+      if (!owner) return [];
+
+      const qb = this.requestRepo
+        .createQueryBuilder('request')
+        .leftJoinAndSelect('request.tenant', 'tenant')
+        .leftJoinAndSelect('tenant.user', 'user')
+        .leftJoinAndSelect('request.unit', 'unit')
+        .leftJoinAndSelect('unit.building', 'building')
+        .leftJoinAndSelect('request.building', 'directBuilding')
+        .leftJoinAndSelect('request.workOrders', 'workOrders')
+        .leftJoinAndSelect('workOrders.contractor', 'contractor')
+        .leftJoinAndSelect('request.feedbacks', 'feedbacks')
+        .where('(building.ownerId = :oid OR directBuilding.ownerId = :oid)', { oid: owner.id });
+
+      return qb.getMany();
     }
 
     if (roleNames.includes('nominee_admin')) {
@@ -250,6 +276,23 @@ export class MaintenanceService {
         }
         return [];
       }
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          return this.workOrderRepo.find({
+            where: [
+              { request: { building: { owner: { id: owner.id } } } },
+              { request: { unit: { building: { owner: { id: owner.id } } } } }
+            ],
+            relations: ['request', 'request.tenant', 'request.unit', 'request.building', 'contractor'],
+            order: { created_at: 'DESC' },
+          });
+        }
+        return [];
+      }
     }
 
     return this.workOrderRepo.find({
@@ -258,8 +301,29 @@ export class MaintenanceService {
     });
   }
 
-  async updateRequest(id: string, dto: any) {
-    // Edit or cancel request
+  async updateRequest(id: string, dto: any, authenticatedUser?: any) {
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          const req = await this.requestRepo.findOne({
+            where: [
+              { id, building: { owner: { id: owner.id } } },
+              { id, unit: { building: { owner: { id: owner.id } } } }
+            ],
+          });
+          if (!req) throw new ForbiddenException('You do not have access to this request');
+        }
+      }
+    }
     return this.requestRepo.update(id, dto);
   }
 
@@ -451,7 +515,43 @@ export class MaintenanceService {
     return feedback;
   }
 
-  async getDashboardKpis(buildingIds?: string[]) {
+  async getDashboardKpis(buildingIds?: string[], authenticatedUser?: any) {
+    let finalBuildingIds = buildingIds;
+
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          const buildings = await this.buildingRepo.find({
+            where: { owner: { id: owner.id } },
+            select: ['id'],
+          });
+          const ownerBuildingIds = buildings.map(b => b.id);
+          if (ownerBuildingIds.length === 0) return {
+            avgResolutionTime: 0,
+            contractorStats: [],
+            pendingRequestsCount: 0,
+            monthlyTrends: [],
+          };
+          
+          if (buildingIds) {
+            finalBuildingIds = buildingIds.filter(id => ownerBuildingIds.includes(id));
+          } else {
+            finalBuildingIds = ownerBuildingIds;
+          }
+        }
+      }
+    }
+
+    const bids = finalBuildingIds;
     // KPIs: Avg resolution time, contractor performance
 
     // 1. Average resolution time in seconds
@@ -462,8 +562,8 @@ export class MaintenanceService {
       .leftJoin('r.unit', 'u')
       .where('wo.status IN (:...statuses)', { statuses: ['completed', 'COMPLETED', 'closed', 'CLOSED'] });
 
-    if (buildingIds) {
-      completedOrdersQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    if (bids) {
+      completedOrdersQb.andWhere('(r.building IN (:...bids_list) OR u.building IN (:...bids_list))', { bids_list: bids });
     }
 
     const completedOrders = await completedOrdersQb.getMany();
@@ -513,8 +613,8 @@ export class MaintenanceService {
       .where('wo.status = :status', { status: MaintenanceStatus.COMPLETED as any })
       .andWhere('wo.completed_at IS NOT NULL');
 
-    if (buildingIds) {
-      monthlyTrendsQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    if (bids) {
+      monthlyTrendsQb.andWhere('(r.building IN (:...bids_list) OR u.building IN (:...bids_list))', { bids_list: bids });
     }
 
     const monthlyTrends = await monthlyTrendsQb.groupBy('month').getRawMany();
@@ -526,8 +626,8 @@ export class MaintenanceService {
         statuses: [MaintenanceStatus.SUBMITTED, MaintenanceStatus.ASSIGNED, MaintenanceStatus.IN_PROGRESS] 
       });
 
-    if (buildingIds) {
-      pendingQb.andWhere('(r.building IN (:...bids) OR u.building IN (:...bids))', { bids: buildingIds });
+    if (bids) {
+      pendingQb.andWhere('(r.building IN (:...bids_list) OR u.building IN (:...bids_list))', { bids_list: bids });
     }
 
     const pendingRequestsCount = await pendingQb.getCount();
@@ -545,17 +645,75 @@ export class MaintenanceService {
     return this.scheduleRepo.save(dto);
   }
 
-  async getSchedules(building_id?: string) {
+  async getSchedules(building_id?: string, authenticatedUser?: any) {
     const qb = this.scheduleRepo.createQueryBuilder('s').leftJoinAndSelect('s.building', 'b');
-    if (building_id) qb.where('s.building_id = :bid', { bid: building_id });
+    
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          qb.andWhere('b.ownerId = :oid', { oid: owner.id });
+        } else {
+          return [];
+        }
+      }
+    }
+
+    if (building_id) qb.andWhere('s.building_id = :bid', { bid: building_id });
     return qb.getMany();
   }
 
-  async updateSchedule(id: string, dto: any) {
+  async updateSchedule(id: string, dto: any, authenticatedUser?: any) {
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          const sch = await this.scheduleRepo.findOne({
+            where: { id, building: { owner: { id: owner.id } } },
+          });
+          if (!sch) throw new ForbiddenException('You do not have access to this schedule');
+        }
+      }
+    }
     return this.scheduleRepo.update(id, dto);
   }
 
-  async deleteSchedule(id: string) {
+  async deleteSchedule(id: string, authenticatedUser?: any) {
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({
+          where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        });
+        if (owner) {
+          const sch = await this.scheduleRepo.findOne({
+            where: { id, building: { owner: { id: owner.id } } },
+          });
+          if (!sch) throw new ForbiddenException('You do not have access to this schedule');
+        }
+      }
+    }
     return this.scheduleRepo.delete(id);
   }
 

@@ -14,6 +14,7 @@ import { UserRole } from '../roles/entities/user-role.entity';
 import { LeasesScheduler } from './leases.scheduler';
 import { LeasePdfService } from './services/lease-pdf.service';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
+import { Owner } from '../owners/entities/owner.entity';
 import { FinanceModule } from '../finance/finance.module';
 import { CommissionModule } from '../commission/commission.module';
 import { forwardRef } from '@nestjs/common';
@@ -31,6 +32,7 @@ import { forwardRef } from '@nestjs/common';
       BuildingAdminAssignment,
       UserRole,
       OrganizationSettings,
+      Owner,
     ]),
     forwardRef(() => FinanceModule),
     CommissionModule,

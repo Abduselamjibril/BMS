@@ -48,11 +48,14 @@ export class RolesGuard implements CanActivate {
       where: { user: { id: user.id } },
       relations: ['role'],
     });
-    if (!userRoles || userRoles.length === 0)
+    
+    if (!userRoles || userRoles.length === 0) {
       throw new ForbiddenException('Insufficient permissions');
+    }
 
-    // Super admin bypass
     const userRoleNames = userRoles.map((ur) => (ur.role as any).name);
+    
+    // Super admin bypass
     if (userRoleNames.includes('super_admin')) return true;
 
     // 1. Check Roles

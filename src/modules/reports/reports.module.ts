@@ -15,10 +15,11 @@ import { Tenant } from '../tenants/entities/tenant.entity';
 import { Visitor } from '../visitors/entities/visitor.entity';
 import { InvoiceItem } from '../finance/entities/invoice-item.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Unit, Lease, Payment, UserRole, Invoice, Building, Site, MeterReading, Tenant, Visitor, InvoiceItem, BuildingAdminAssignment]),
+    TypeOrmModule.forFeature([Unit, Lease, Payment, UserRole, Invoice, Building, Site, MeterReading, Tenant, Visitor, InvoiceItem, BuildingAdminAssignment, Owner]),
     MaintenanceModule,
   ],
   providers: [ReportsService],

@@ -1,10 +1,11 @@
 import {
-  BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
   Inject,
   forwardRef,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -35,6 +36,7 @@ import { FinanceService } from '../finance/finance.service';
 import { InvoiceItemType } from '../finance/entities/invoice-item.entity';
 import { CommissionCalculationService } from '../commission/services/commission-calculation.service';
 import { CommissionBasis } from '../commission/entities/commission-rule.entity';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Injectable()
 export class LeasesService {
@@ -59,6 +61,8 @@ export class LeasesService {
     private readonly orgSettingsRepository: Repository<OrganizationSettings>,
     @InjectRepository(LeasePayment)
     private readonly leasePaymentRepository: Repository<LeasePayment>,
+    @InjectRepository(Owner)
+    private readonly ownerRepository: Repository<Owner>,
     private readonly dataSource: DataSource,
     private readonly leasePdfService: LeasePdfService,
 
@@ -122,11 +126,24 @@ export class LeasesService {
     return `L-${timestamp}-${random}`;
   }
 
-  async create(dto: CreateLeaseDto): Promise<Lease> {
+  async create(dto: CreateLeaseDto, userId?: string, roles: string[] = []): Promise<Lease> {
     if (dto.start_date > dto.end_date) {
       throw new BadRequestException(
         'start_date must be less than or equal to end_date',
       );
+    }
+
+    const building = await this.buildingRepository.findOne({
+      where: { id: dto.building_id },
+      relations: ['owner']
+    });
+    if (!building) throw new NotFoundException('Building not found');
+
+    if (roles && roles.includes('owner') && userId) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: userId } } });
+      if (!owner || building.owner.id !== owner.id) {
+        throw new ForbiddenException('You can only create leases for your own buildings');
+      }
     }
 
     const tenant = await this.tenantRepository.findOne({
@@ -140,10 +157,8 @@ export class LeasesService {
     });
     if (!unit) throw new NotFoundException('Unit not found');
 
-    const building = await this.buildingRepository.findOne({
-      where: { id: dto.building_id },
-    });
-    if (!building) throw new NotFoundException('Building not found');
+    // Building check already done above
+
 
     if (unit.building.id !== building.id) {
       throw new BadRequestException('Unit does not belong to building');
@@ -190,6 +205,7 @@ export class LeasesService {
     const isNominee = userRoles.some((ur) => ur.role.name === 'nominee_admin');
     const isTenant = userRoles.some((ur) => ur.role.name === 'tenant');
     const isSuperAdmin = userRoles.some((ur) => ur.role.name === 'super_admin');
+    const isOwner = userRoles.some((ur) => ur.role.name === 'owner');
 
     const query = this.leaseRepository
       .createQueryBuilder('lease')
@@ -201,6 +217,12 @@ export class LeasesService {
     // 1. Super Admin: No filters
     if (isSuperAdmin) {
       // no-op
+    }
+    // 1b. Owner: Filter by building.owner_id
+    else if (isOwner) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: currentUserId } } });
+      if (!owner) return [];
+      query.andWhere('building.owner_id = :ownerId', { ownerId: owner.id });
     }
     // 2. Nominee Admin: Filter by assigned buildings/units
     else if (isNominee) {
@@ -288,12 +310,27 @@ export class LeasesService {
     return query.getMany();
   }
 
-  async activate(id: string): Promise<Lease> {
+  async findOne(id: string, userId?: string, roles: string[] = []): Promise<Lease> {
     const cleanId = this.normalizeId(id);
     const lease = await this.leaseRepository.findOne({
       where: { id: cleanId },
-      relations: ['tenant', 'unit', 'building'],
+      relations: ['tenant', 'unit', 'building', 'building.owner'],
     });
+
+    if (!lease) throw new NotFoundException('Lease not found');
+
+    if (roles.includes('owner') && userId) {
+      const owner = await this.ownerRepository.findOne({ where: { user: { id: userId } } });
+      if (!owner || lease.building.owner.id !== owner.id) {
+        throw new ForbiddenException('You do not have access to this lease');
+      }
+    }
+
+    return lease;
+  }
+
+  async activate(id: string, userId?: string, roles: string[] = []): Promise<Lease> {
+    const lease = await this.findOne(id, userId, roles);
     if (!lease) throw new NotFoundException('Lease not found');
 
     if (lease.status !== LeaseStatus.DRAFT) {
@@ -370,13 +407,8 @@ export class LeasesService {
     }) as Promise<Lease>;
   }
 
-  async terminate(id: string, dto: TerminateLeaseDto): Promise<Lease> {
-    const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-      relations: ['tenant', 'unit', 'building'],
-    });
-    if (!lease) throw new NotFoundException('Lease not found');
+  async terminate(id: string, dto: TerminateLeaseDto, userId?: string, roles: string[] = []): Promise<Lease> {
+    const lease = await this.findOne(id, userId, roles);
 
     if (![LeaseStatus.ACTIVE, LeaseStatus.RENEWED].includes(lease.status)) {
       throw new BadRequestException(
@@ -485,13 +517,8 @@ export class LeasesService {
     }) as Promise<Lease>;
   }
 
-  async renew(id: string, dto: RenewLeaseDto): Promise<Lease> {
-    const cleanId = this.normalizeId(id);
-    const currentLease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-      relations: ['tenant', 'unit', 'building'],
-    });
-    if (!currentLease) throw new NotFoundException('Lease not found');
+  async renew(id: string, dto: RenewLeaseDto, userId?: string, roles: string[] = []): Promise<Lease> {
+    const currentLease = await this.findOne(id, userId, roles);
 
     if (
       ![LeaseStatus.ACTIVE, LeaseStatus.EXPIRED].includes(currentLease.status)
@@ -545,23 +572,14 @@ export class LeasesService {
     return this.leaseRepository.save(renewedLease);
   }
 
-  async uploadLeaseDocument(id: string, docPath: string): Promise<Lease> {
-    const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-    });
-    if (!lease) throw new NotFoundException('Lease not found');
+  async uploadLeaseDocument(id: string, docPath: string, userId?: string, roles: string[] = []): Promise<Lease> {
+    const lease = await this.findOne(id, userId, roles);
     lease.doc_path = docPath;
     return this.leaseRepository.save(lease);
   }
 
-  async downloadLeasePdf(id: string): Promise<Buffer> {
-    const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-      relations: ['tenant', 'unit', 'building'],
-    });
-    if (!lease) throw new NotFoundException('Lease not found');
+  async downloadLeasePdf(id: string, userId?: string, roles: string[] = []): Promise<Buffer> {
+    const lease = await this.findOne(id, userId, roles);
 
     return this.leasePdfService.generateLeasePdf({
       lease_number: lease.lease_number,
@@ -604,10 +622,10 @@ export class LeasesService {
     return { under30, under60, under90 };
   }
 
-  async getPaymentSchedule(leaseId: string): Promise<LeasePayment[]> {
-    const cleanId = this.normalizeId(leaseId);
+  async getPaymentSchedule(leaseId: string, userId?: string, roles: string[] = []): Promise<LeasePayment[]> {
+    const lease = await this.findOne(leaseId, userId, roles);
     return this.leasePaymentRepository.find({
-      where: { lease: { id: cleanId } },
+      where: { lease: { id: lease.id } },
       order: { due_date: 'ASC' },
     });
   }
@@ -707,13 +725,8 @@ export class LeasesService {
     service_charge: number;
     billing_cycle: string;
     deposit_amount: number;
-  }>): Promise<Lease> {
-    const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-      relations: ['tenant', 'unit', 'building'],
-    });
-    if (!lease) throw new NotFoundException('Lease not found');
+  }>, userId?: string, roles: string[] = []): Promise<Lease> {
+    const lease = await this.findOne(id, userId, roles);
 
     if (lease.status !== LeaseStatus.DRAFT) {
       throw new BadRequestException('Only draft leases can be edited');
@@ -743,12 +756,8 @@ export class LeasesService {
     }) as Promise<Lease>;
   }
 
-  async remove(id: string): Promise<void> {
-    const cleanId = this.normalizeId(id);
-    const lease = await this.leaseRepository.findOne({
-      where: { id: cleanId },
-    });
-    if (!lease) throw new NotFoundException('Lease not found');
+  async remove(id: string, userId?: string, roles: string[] = []): Promise<void> {
+    const lease = await this.findOne(id, userId, roles);
 
     // Allow removing drafts and terminated leases. Active or renewed leases
     // should not be deletable because they affect occupancy/history.

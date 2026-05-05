@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   HttpException,
   HttpStatus,
+  Request,
 } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -38,8 +39,10 @@ export class UnitsController {
   @Post()
   @ApiOperation({ summary: 'Create a unit' })
   @Permissions('units:create')
-  create(@Body() dto: CreateUnitDto) {
-    return this.unitsService.create(dto);
+  create(@Body() dto: CreateUnitDto, @Request() req?: any) {
+    const userId = req?.user?.id;
+    const roles = req?.user?.roles || [];
+    return this.unitsService.create(dto, userId, roles);
   }
 
   @Post('bulk-upload')
@@ -75,15 +78,20 @@ export class UnitsController {
   findAll(
     @Query('building_id') buildingId?: string,
     @Query('status') status?: string,
+    @Request() req?: any,
   ) {
-    return this.unitsService.findAll(buildingId, status);
+    const userId = req?.user?.id;
+    const roles = req?.user?.roles || [];
+    return this.unitsService.findAll(buildingId, status, userId, roles);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get unit by id' })
   @Permissions('units:read')
-  findOne(@Param('id') id: string) {
-    return this.unitsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.unitsService.findOne(id, userId, roles);
   }
 
   @Get(':id/amenities')
@@ -114,15 +122,20 @@ export class UnitsController {
   update(
     @Param('id') id: string,
     @Body() dto: Partial<import('./dto/create-unit.dto').CreateUnitDto>,
+    @Request() req: any,
   ) {
-    return this.unitsService.update(id, dto);
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.unitsService.update(id, dto, userId, roles);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete unit by id' })
   @Permissions('units:delete')
-  remove(@Param('id') id: string) {
-    return this.unitsService.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.unitsService.remove(id, userId, roles);
   }
 
   @Post(':id/amenities')

@@ -41,23 +41,33 @@ export class BuildingsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get building by id' })
   @Permissions('buildings:read')
-  findOne(@Param('id') id: string) {
-    return this.buildingsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.buildingsService.findOne(id, userId, roles);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update building by id' })
   @ApiBody({ type: UpdateBuildingDto })
   @Permissions('buildings:update')
-  update(@Param('id') id: string, @Body() dto: UpdateBuildingDto) {
-    return this.buildingsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateBuildingDto,
+    @Request() req,
+  ) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.buildingsService.update(id, dto, userId, roles);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete building by id' })
   @Permissions('buildings:delete')
-  remove(@Param('id') id: string) {
-    return this.buildingsService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    const userId = req.user?.id;
+    const roles = req.user?.roles || [];
+    return this.buildingsService.remove(id, userId, roles);
   }
 
   @Get(':id/amenities')

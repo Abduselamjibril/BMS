@@ -14,6 +14,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationSettings } from '../settings/entities/organization-settings.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
+import { Owner } from '../owners/entities/owner.entity';
 import { forwardRef } from '@nestjs/common';
 import { LeasesModule } from '../leases/leases.module';
 import { CommissionModule } from '../commission/commission.module';
@@ -30,6 +31,7 @@ import { CommissionModule } from '../commission/commission.module';
       OrganizationSettings,
       UserRole,
       Tenant,
+      Owner,
     ]),
     NotificationsModule,
     forwardRef(() => LeasesModule),

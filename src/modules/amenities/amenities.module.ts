@@ -7,6 +7,8 @@ import { BuildingAmenity } from './entities/building-amenity.entity';
 import { UnitAmenity } from './entities/unit-amenity.entity';
 import { Building } from '../buildings/entities/building.entity';
 import { Unit } from '../units/entities/unit.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { Unit } from '../units/entities/unit.entity';
       UnitAmenity,
       Building,
       Unit,
+      Owner,
+      UserRole,
     ]),
   ],
   controllers: [AmenitiesController],

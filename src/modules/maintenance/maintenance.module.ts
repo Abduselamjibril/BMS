@@ -13,6 +13,8 @@ import { UserBuilding } from '../users/entities/user-building.entity';
 import { UserRole } from '../roles/entities/user-role.entity';
 import { Tenant } from '../tenants/entities/tenant.entity';
 import { Expense } from '../finance/entities/expense.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { Building } from '../buildings/entities/building.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CommissionModule } from '../commission/commission.module';
 
@@ -28,6 +30,8 @@ import { CommissionModule } from '../commission/commission.module';
       UserRole,
       Tenant,
       Expense,
+      Owner,
+      Building,
     ]),
     NotificationsModule,
     CommissionModule,

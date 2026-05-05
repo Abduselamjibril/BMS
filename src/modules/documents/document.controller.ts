@@ -137,16 +137,16 @@ export class DocumentController {
   @Permissions('documents:history')
   @ApiOperation({ summary: 'Get document version history' })
   @ApiResponse({ status: 200, description: 'Document history.' })
-  async getDocumentHistory(@Param('id') id: string) {
-    return this.documentService.getDocumentHistory(id);
+  async getDocumentHistory(@Param('id') id: string, @Req() req: any) {
+    return this.documentService.getDocumentHistory(id, req.user);
   }
 
   @Delete(':id')
   @Permissions('documents:delete')
   @ApiOperation({ summary: 'Soft delete document' })
   @ApiResponse({ status: 200, description: 'Document deleted.' })
-  async softDeleteDocument(@Param('id') id: string) {
-    return this.documentService.softDeleteDocument(id);
+  async softDeleteDocument(@Param('id') id: string, @Req() req: any) {
+    return this.documentService.softDeleteDocument(id, req.user);
   }
 
   @Post('generate-contract')

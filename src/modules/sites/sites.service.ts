@@ -7,6 +7,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Site } from './entities/site.entity';
 import { Building } from '../buildings/entities/building.entity';
+import { Owner } from '../owners/entities/owner.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
 
 @Injectable()
 export class SitesService {
@@ -15,6 +17,10 @@ export class SitesService {
     private readonly siteRepo: Repository<Site>,
     @InjectRepository(Building)
     private readonly buildingRepo: Repository<Building>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
   ) {}
 
   async create(dto: Partial<Site>): Promise<Site> {
@@ -22,8 +28,30 @@ export class SitesService {
     return this.siteRepo.save(site);
   }
 
-  async findAll(): Promise<Site[]> {
-    return this.siteRepo.find({ relations: ['buildings', 'manager'] });
+  async findAll(authenticatedUser?: any): Promise<Site[]> {
+    const qb = this.siteRepo.createQueryBuilder('site')
+      .leftJoinAndSelect('site.buildings', 'buildings')
+      .leftJoinAndSelect('site.manager', 'manager');
+
+    if (authenticatedUser) {
+      const currentUserId = authenticatedUser.id || authenticatedUser.sub;
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: currentUserId } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map((ur) => ur.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: currentUserId } } });
+        if (!owner) return [];
+
+        // Filter sites that have buildings owned by this owner
+        qb.innerJoin('site.buildings', 'b_owner')
+          .andWhere('b_owner.ownerId = :oid', { oid: owner.id });
+      }
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: string): Promise<Site | null> {

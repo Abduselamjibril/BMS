@@ -36,8 +36,8 @@ export class UtilityController {
     summary:
       'List units/meters with abnormal utility consumption (possible leaks)',
   })
-  async getUtilityLeaks() {
-    return this.utilityService.getUtilityLeaks();
+  async getLeaks(@Req() req: any) {
+    return this.utilityService.getUtilityLeaks(req.user);
   }
 
   @Post('meters')
@@ -145,7 +145,7 @@ export class UtilityController {
   @Get('meters/:id')
   @Permissions('utilities:meters:read')
   @ApiOperation({ summary: 'Get details for a specific meter' })
-  async findMeter(@Param('id') id: string) {
-    return this.utilityService.findMeter(id);
+  async findMeter(@Param('id') id: string, @Req() req: any) {
+    return this.utilityService.findMeter(id, req.user);
   }
 }

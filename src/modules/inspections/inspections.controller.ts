@@ -22,8 +22,8 @@ export class InspectionsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get inspection details' })
-  async getOne(@Param('id') id: string) {
-    return this.inspectionsService.getInspection(id);
+  async getOne(@Param('id') id: string, @Req() req: any) {
+    return this.inspectionsService.getInspection(id, req.user);
   }
 
   @Patch('items/:itemId')
@@ -31,8 +31,9 @@ export class InspectionsController {
   async updateItem(
     @Param('itemId') itemId: string,
     @Body() dto: { condition?: any; comment?: string; photos?: string[] },
+    @Req() req: any,
   ) {
-    return this.inspectionsService.updateItem(itemId, dto);
+    return this.inspectionsService.updateItem(itemId, dto, req.user);
   }
 
   @Post(':id/submit')
@@ -40,8 +41,9 @@ export class InspectionsController {
   async submit(
     @Param('id') id: string,
     @Body() dto: { signature_url?: string; notes?: string },
+    @Req() req: any,
   ) {
-    return this.inspectionsService.submitInspection(id, dto.signature_url, dto.notes);
+    return this.inspectionsService.submitInspection(id, dto.signature_url, dto.notes, req.user);
   }
 
   @Post(':id/verify')

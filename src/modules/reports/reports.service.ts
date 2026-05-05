@@ -15,6 +15,7 @@ import { Tenant } from '../tenants/entities/tenant.entity';
 import { Visitor } from '../visitors/entities/visitor.entity';
 import { InvoiceItem, InvoiceItemType } from '../finance/entities/invoice-item.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Injectable()
 export class ReportsService {
@@ -41,6 +42,8 @@ export class ReportsService {
     private readonly invoiceItemRepo: Repository<InvoiceItem>,
     @InjectRepository(BuildingAdminAssignment)
     private readonly adminRepo: Repository<BuildingAdminAssignment>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
     private readonly maintenanceService: MaintenanceService,
   ) {}
 
@@ -51,6 +54,18 @@ export class ReportsService {
     const roles = user.roles || [];
     if (roles.includes('super_admin') || roles.includes('admin')) {
       return null;
+    }
+
+    if (roles.includes('owner')) {
+      const owner = await this.ownerRepo.findOne({ where: { user: { id: user.id } } });
+      if (!owner) return ['00000000-0000-0000-0000-000000000000'];
+      
+      const buildings = await this.buildingRepo.find({
+        where: { owner: { id: owner.id } },
+        select: ['id'],
+      });
+      const buildingIds = buildings.map(b => b.id);
+      return buildingIds.length > 0 ? buildingIds : ['00000000-0000-0000-0000-000000000000'];
     }
 
     // Get buildings assigned via site management

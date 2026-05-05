@@ -65,6 +65,12 @@ export class OwnersService {
         const userRole = this.userRoleRepository.create({ user, role: ownerRole });
         await this.userRoleRepository.save(userRole);
       }
+      
+      // Link Owner to User
+      if (!savedOwner.user_id) {
+        await this.ownerRepository.update(savedOwner.id, { user_id: user.id });
+        savedOwner.user_id = user.id;
+      }
     }
 
     return savedOwner;

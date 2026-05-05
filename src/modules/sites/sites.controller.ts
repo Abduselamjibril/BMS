@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { SitesService } from './sites.service';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -35,8 +36,8 @@ export class SitesController {
   @ApiOperation({ summary: 'Get all sites' })
   @ApiResponse({ status: 200, description: 'List of sites.' })
   @Permissions('sites:read')
-  async findAll() {
-    return this.sitesService.findAll();
+  async findAll(@Req() req: any) {
+    return this.sitesService.findAll(req.user);
   }
 
   @Get(':id')

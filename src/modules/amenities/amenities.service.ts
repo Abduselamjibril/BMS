@@ -11,6 +11,9 @@ import { UnitAmenity } from './entities/unit-amenity.entity';
 import { Building } from '../buildings/entities/building.entity';
 import { Unit } from '../units/entities/unit.entity';
 import { CreateAmenityDto } from './dto/create-amenity.dto';
+import { Owner } from '../owners/entities/owner.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class AmenitiesService {
@@ -25,12 +28,32 @@ export class AmenitiesService {
     private readonly buildingRepo: Repository<Building>,
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(Owner)
+    private readonly ownerRepo: Repository<Owner>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
   ) {}
   // Link amenity to building
-  async linkToBuilding(buildingId: string, amenityId: string) {
+  async linkToBuilding(buildingId: string, amenityId: string, authenticatedUser?: any) {
     const building = await this.buildingRepo.findOne({
       where: { id: buildingId },
+      relations: ['owner']
     });
+
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authenticatedUser.id || authenticatedUser.sub } } });
+        if (!owner || building?.owner?.id !== owner.id) {
+          throw new ForbiddenException('You can only link amenities to your own buildings');
+        }
+      }
+    }
     const amenity = await this.amenityRepository.findOne({
       where: { id: amenityId },
     });
@@ -44,18 +67,53 @@ export class AmenitiesService {
     return this.buildingAmenityRepo.save(link);
   }
 
-  async unlinkFromBuilding(buildingId: string, amenityId: string) {
+  async unlinkFromBuilding(buildingId: string, amenityId: string, authenticatedUser?: any) {
     const link = await this.buildingAmenityRepo.findOne({
       where: { building: { id: buildingId }, amenity: { id: amenityId } },
+      relations: ['building', 'building.owner']
     });
     if (!link) throw new BadRequestException('Amenity link not found');
+
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authenticatedUser.id || authenticatedUser.sub } } });
+        if (!owner || link.building.owner.id !== owner.id) {
+          throw new ForbiddenException('You can only unlink amenities from your own buildings');
+        }
+      }
+    }
+
     await this.buildingAmenityRepo.delete(link.id);
     return { removed: true };
   }
 
   // Link amenity to unit
-  async linkToUnit(unitId: string, amenityId: string) {
-    const unit = await this.unitRepo.findOne({ where: { id: unitId } });
+  async linkToUnit(unitId: string, amenityId: string, authenticatedUser?: any) {
+    const unit = await this.unitRepo.findOne({ 
+      where: { id: unitId },
+      relations: ['building', 'building.owner']
+    });
+
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authenticatedUser.id || authenticatedUser.sub } } });
+        if (!owner || unit?.building?.owner?.id !== owner.id) {
+          throw new ForbiddenException('You can only link amenities to units in your own buildings');
+        }
+      }
+    }
     const amenity = await this.amenityRepository.findOne({
       where: { id: amenityId },
     });
@@ -69,11 +127,28 @@ export class AmenitiesService {
     return this.unitAmenityRepo.save(link);
   }
 
-  async unlinkFromUnit(unitId: string, amenityId: string) {
+  async unlinkFromUnit(unitId: string, amenityId: string, authenticatedUser?: any) {
     const link = await this.unitAmenityRepo.findOne({
       where: { unit: { id: unitId }, amenity: { id: amenityId } },
+      relations: ['unit', 'unit.building', 'unit.building.owner']
     });
     if (!link) throw new BadRequestException('Amenity link not found');
+
+    if (authenticatedUser) {
+      const userRoles = await this.userRoleRepo.find({
+        where: { user: { id: authenticatedUser.id || authenticatedUser.sub } },
+        relations: ['role'],
+      });
+      const roleNames = userRoles.map(r => r.role.name);
+
+      if (roleNames.includes('owner')) {
+        const owner = await this.ownerRepo.findOne({ where: { user: { id: authenticatedUser.id || authenticatedUser.sub } } });
+        if (!owner || link.unit.building.owner.id !== owner.id) {
+          throw new ForbiddenException('You can only unlink amenities from units in your own buildings');
+        }
+      }
+    }
+
     await this.unitAmenityRepo.delete(link.id);
     return { removed: true };
   }

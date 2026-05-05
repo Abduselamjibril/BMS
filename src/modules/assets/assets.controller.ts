@@ -8,6 +8,7 @@ import {
   Delete,
   HttpStatus,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AssetsService } from './assets.service';
@@ -31,30 +32,30 @@ export class AssetsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all property assets with optional filters' })
+  @ApiOperation({ summary: 'Get all assets with filters' })
   @Permissions('assets:read')
-  findAll(@Query() query: any) {
-    return this.assetsService.findAll(query);
+  findAll(@Query() query: any, @Req() req: any) {
+    return this.assetsService.findAll({ ...query, authenticatedUser: req.user });
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get asset details by ID' })
   @Permissions('assets:read')
-  findOne(@Param('id') id: string) {
-    return this.assetsService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.assetsService.findOne(id, req.user);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update asset details' })
   @Permissions('assets:update')
-  update(@Param('id') id: string, @Body() updateAssetDto: UpdateAssetDto) {
-    return this.assetsService.update(id, updateAssetDto);
+  update(@Param('id') id: string, @Body() updateAssetDto: UpdateAssetDto, @Req() req: any) {
+    return this.assetsService.update(id, updateAssetDto, req.user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete asset from inventory' })
   @Permissions('assets:delete')
-  remove(@Param('id') id: string) {
-    return this.assetsService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.assetsService.remove(id, req.user);
   }
 }

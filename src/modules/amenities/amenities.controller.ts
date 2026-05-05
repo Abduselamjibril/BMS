@@ -7,6 +7,8 @@ import {
   Put,
   Delete,
   Query,
+  Req,
+  Request,
 } from '@nestjs/common';
 import { Auth } from '../../common/decorators/auth.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -41,6 +43,8 @@ export class AmenitiesController {
     return this.amenitiesService.findOne(amenityId);
   }
 
+
+
   @Put(':amenity_id')
   @ApiOperation({ summary: 'Update amenity by id' })
   @ApiBody({
@@ -74,8 +78,9 @@ export class AmenitiesController {
   linkToBuilding(
     @Param('building_id') buildingId: string,
     @Param('amenity_id') amenityId: string,
+    @Request() req: any,
   ) {
-    return this.amenitiesService.linkToBuilding(buildingId, amenityId);
+    return this.amenitiesService.linkToBuilding(buildingId, amenityId, req.user);
   }
 
   @Delete('/buildings/:building_id/amenities/:amenity_id')
@@ -84,8 +89,9 @@ export class AmenitiesController {
   unlinkFromBuilding(
     @Param('building_id') buildingId: string,
     @Param('amenity_id') amenityId: string,
+    @Request() req: any,
   ) {
-    return this.amenitiesService.unlinkFromBuilding(buildingId, amenityId);
+    return this.amenitiesService.unlinkFromBuilding(buildingId, amenityId, req.user);
   }
 
   // Link amenity to unit
@@ -95,8 +101,9 @@ export class AmenitiesController {
   linkToUnit(
     @Param('unit_id') unitId: string,
     @Param('amenity_id') amenityId: string,
+    @Request() req: any,
   ) {
-    return this.amenitiesService.linkToUnit(unitId, amenityId);
+    return this.amenitiesService.linkToUnit(unitId, amenityId, req.user);
   }
 
   @Delete('/units/:unit_id/amenities/:amenity_id')
@@ -105,7 +112,8 @@ export class AmenitiesController {
   unlinkFromUnit(
     @Param('unit_id') unitId: string,
     @Param('amenity_id') amenityId: string,
+    @Request() req: any,
   ) {
-    return this.amenitiesService.unlinkFromUnit(unitId, amenityId);
+    return this.amenitiesService.unlinkFromUnit(unitId, amenityId, req.user);
   }
 }

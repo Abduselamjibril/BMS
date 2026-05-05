@@ -16,6 +16,7 @@ import { Role } from '../roles/entities/role.entity';
 import { Lease } from '../leases/entities/lease.entity';
 import { LeasesModule } from '../leases/leases.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { Owner } from '../owners/entities/owner.entity';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       UserRole,
       Role,
       Lease,
+      Owner,
     ]),
     LeasesModule,
     NotificationsModule,
