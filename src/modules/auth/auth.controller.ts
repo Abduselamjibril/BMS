@@ -5,6 +5,8 @@ import { Auth } from '../../common/decorators/auth.decorator';
 import { AuthService } from './auth.service';
 import { LoginDto } from '../users/dto/login.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
+
 
 @ApiTags('auth')
 @Controller('auth')
@@ -39,5 +41,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh JWT for long-lived mobile sessions' })
   async refresh(@Req() req: any) {
     return this.authService.refreshToken(req.user);
+  }
+
+  @Auth()
+  @Post('change-password')
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.id, dto);
   }
 }

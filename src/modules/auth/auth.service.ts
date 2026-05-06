@@ -14,6 +14,8 @@ import { LoginHistory } from '../users/entities/login-history.entity';
 import { LoginDto } from '../users/dto/login.dto';
 import { UserStatus } from '../users/entities/user.entity';
 import * as bcrypt from 'bcryptjs';
+import { ChangePasswordDto } from './dto/change-password.dto';
+
 
 @Injectable()
 export class AuthService {
@@ -139,5 +141,22 @@ export class AuthService {
       order: { login_time: 'DESC' },
       take: 20,
     });
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersService.findById(userId);
+    
+    // Verify current password
+    const isMatch = await bcrypt.compare(dto.currentPassword, user.password_hash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+    user.password_hash = hashedPassword;
+    await this.usersService.save(user);
+
+    return { message: 'Password changed successfully' };
   }
 }
