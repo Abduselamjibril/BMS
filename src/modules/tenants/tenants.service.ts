@@ -566,7 +566,11 @@ export class TenantsService {
       }
     }
 
-    const where = finalTenantId ? { tenant: { id: finalTenantId } } : {};
+    if (!finalTenantId) {
+      return [];
+    }
+
+    const where = { tenant: { id: finalTenantId } };
     const documents = await this.documentRepository.find({
       where,
       relations: ['tenant'],
