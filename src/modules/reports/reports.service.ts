@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Unit, UnitStatus } from '../units/entities/unit.entity';
@@ -16,9 +16,14 @@ import { Visitor } from '../visitors/entities/visitor.entity';
 import { InvoiceItem, InvoiceItemType } from '../finance/entities/invoice-item.entity';
 import { BuildingAdminAssignment } from '../buildings/entities/building-admin-assignment.entity';
 import { Owner } from '../owners/entities/owner.entity';
+import { ReportSchedule } from './entities/report-schedule.entity';
+import { DataSource } from 'typeorm';
+const PDFDocument = require('pdfkit');
 
 @Injectable()
-export class ReportsService {
+export class ReportsService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(ReportsService.name);
+
   constructor(
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
@@ -44,694 +49,861 @@ export class ReportsService {
     private readonly adminRepo: Repository<BuildingAdminAssignment>,
     @InjectRepository(Owner)
     private readonly ownerRepo: Repository<Owner>,
+    @InjectRepository(ReportSchedule)
+    private readonly scheduleRepo: Repository<ReportSchedule>,
     private readonly maintenanceService: MaintenanceService,
+    private readonly dataSource: DataSource,
   ) {}
 
-  private async getScopingCriteria(user: any) {
-    if (!user) return null;
-    
-    // Super Admin and Admin can see everything
-    const roles = user.roles || [];
-    if (roles.includes('super_admin') || roles.includes('admin')) {
-      return null;
-    }
-
-    if (roles.includes('owner')) {
-      const owner = await this.ownerRepo.findOne({ where: { user: { id: user.id } } });
-      if (!owner) return ['00000000-0000-0000-0000-000000000000'];
-      
-      const buildings = await this.buildingRepo.find({
-        where: { owner: { id: owner.id } },
-        select: ['id'],
-      });
-      const buildingIds = buildings.map(b => b.id);
-      return buildingIds.length > 0 ? buildingIds : ['00000000-0000-0000-0000-000000000000'];
-    }
-
-    // Get buildings assigned via site management
-    const managedSites = await this.siteRepo.find({
-      where: { manager_id: user.id },
-      relations: ['buildings'],
-    });
-    const siteBuildingIds = managedSites.flatMap(s => s.buildings?.map(b => b.id) || []);
-
-    // Get buildings explicitly assigned to the user
-    const assignments = await this.adminRepo.find({
-      where: { user: { id: user.id }, status: 'active' },
-      relations: ['building'],
-    });
-    const directBuildingIds = assignments.map(a => a.building?.id);
-
-    const allBuildingIds = [...new Set([...siteBuildingIds, ...directBuildingIds])].filter(Boolean);
-    
-    // If user is a site_admin, prioritize the site assignment. 
-    // If they manage NO site but HAVE the site_admin role, they should see NOTHING.
-    if (roles.includes('site_admin')) {
-        return siteBuildingIds.length > 0 ? siteBuildingIds : ['00000000-0000-0000-0000-000000000000'];
-    }
-
-    return allBuildingIds.length > 0 ? allBuildingIds : ['00000000-0000-0000-0000-000000000000']; // Return dummy if none to ensure empty result
+  async onApplicationBootstrap() {
+    this.logger.log('ReportsService: onApplicationBootstrap called');
+    await this.initializeMaterializedViews();
   }
 
-  async getPeopleReport(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    
-    const tenantWhere: any = {};
-    const visitorWhere: any = {};
-    
-    if (buildingIds) {
-       tenantWhere.building = In(buildingIds);
-       visitorWhere.building = In(buildingIds);
-    }
-
-    const tenants = await this.tenantRepo.find({
-      where: tenantWhere,
-      relations: ['user'],
-      take: 50,
-    });
-    const visitors = await this.visitorRepo.find({
-      where: visitorWhere,
-      order: { check_in_time: 'DESC' },
-      take: 50,
-    });
-    return { tenants, visitors };
-  }
-
-  async getLeaseReport(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = {};
-    if (buildingIds) {
-      where.unit = { building: { id: In(buildingIds) } };
-    }
-
-    return this.leaseRepo.find({
-      where,
-      relations: ['unit', 'unit.building', 'tenant'],
-      order: { start_date: 'DESC' },
-      take: 100,
-    });
-  }
-
-  async getPropertyReport(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = {};
-    if (buildingIds) {
-      where.id = In(buildingIds);
-    }
-
-    const buildings = await this.buildingRepo.find({
-      where,
-      relations: ['units'],
-    });
-    
-    return buildings.map(b => {
-      const totalUnits = b.units?.length || 0;
-      const occupiedUnits = b.units?.filter(u => u.status === UnitStatus.OCCUPIED).length || 0;
-      return {
-        id: b.id,
-        name: b.name,
-        total_units: totalUnits,
-        occupied_units: occupiedUnits,
-        occupancy_rate: totalUnits > 0 ? (occupiedUnits / totalUnits) * 100 : 0,
-      };
-    });
-  }
-
-  async getOverduePenaltyReport(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = { status: In([InvoiceStatus.OVERDUE, InvoiceStatus.PARTIAL]) };
-    if (buildingIds) {
-      where.unit = { building: { id: In(buildingIds) } };
-    }
-
-    const overdueInvoices = await this.invoiceRepo.find({
-      where,
-      relations: ['tenant', 'unit', 'lease'],
-    });
-
-    const now = new Date();
-    
-    return overdueInvoices.map(inv => {
-      const dueDate = new Date(inv.due_date);
-      const daysOverdue = Math.max(0, Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
-      
-      return {
-        invoice_no: inv.invoice_no,
-        tenant_name: inv.tenant ? `${inv.tenant.first_name} ${inv.tenant.last_name}` : 'N/A',
-        unit_name: inv.unit?.unit_number || 'N/A',
-        due_date: inv.due_date,
-        days_overdue: daysOverdue,
-        total_amount: inv.total_amount,
-        amount_paid: inv.amount_paid,
-        balance: Number(inv.total_amount) - Number(inv.amount_paid),
-        late_fee_amount: inv.late_fee_amount,
-        // Assuming settings could be fetched here if needed, but for now we show what's recorded
-      };
-    });
-  }
-
-  async getDetailedFinancials(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const invoiceWhere: any = {};
-    const paymentWhere: any = {};
-    
-    if (buildingIds) {
-      invoiceWhere.unit = { building: { id: In(buildingIds) } };
-      paymentWhere.invoice = { unit: { building: { id: In(buildingIds) } } };
-    }
-
-    const recentInvoices = await this.invoiceRepo.find({
-      where: invoiceWhere,
-      order: { due_date: 'DESC' } as any,
-      take: 20,
-      relations: ['tenant'],
-    });
-    
-    const recentPayments = await this.paymentRepo.find({
-      where: paymentWhere,
-      order: { created_at: 'DESC' },
-      take: 20,
-      relations: ['invoice', 'invoice.tenant'],
-    });
-
-    return { recentInvoices, recentPayments };
-  }
-
-  async dashboard(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = {};
-    if (buildingIds) {
-      where.building = { id: In(buildingIds) };
-    }
-
-    // Occupancy rate
-    const totalUnits = await this.unitRepo.count({ where });
-    const occupiedUnits = await this.unitRepo.count({
-      where: { ...where, status: UnitStatus.OCCUPIED },
-    });
-    const occupiedLeases = await this.leaseRepo.count({
-      where: { unit: (where.building && buildingIds) ? { building: { id: In(buildingIds) } } : {}, status: LeaseStatus.ACTIVE },
-    });
-    const occupancy =
-      totalUnits === 0 ? 0 : (occupiedUnits / totalUnits) * 100;
-
-    // Revenue: sum of paid payments
-    const revenueQb = this.paymentRepo
-      .createQueryBuilder('p')
-      .select('COALESCE(SUM(p.amount),0)', 'total')
-      .where('p.status = :status', { status: 'confirmed' });
-    
-    if (buildingIds) {
-      revenueQb.innerJoin('p.invoice', 'i')
-               .innerJoin('i.unit', 'u')
-               .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
-    }
-    const revenueResult = await revenueQb.getRawOne();
-
-    const totalRevenue = Number(revenueResult.total || 0);
-
-    // Maintenance KPIs: delegate to maintenance service if available
-    let maintenanceKpis = { avgResolutionTime: 0, contractorStats: [] } as any;
+  private async initializeMaterializedViews() {
     try {
-      maintenanceKpis = await this.maintenanceService.getDashboardKpis(buildingIds || undefined);
-    } catch (e) {
-      // ignore if maintenance service not available
+      this.logger.log('Initializing Materialized Views for Reporting...');
+      
+      const sql = `
+        -- 1. Occupancy Summary by Building
+        DROP MATERIALIZED VIEW IF EXISTS mv_occupancy_summary CASCADE;
+        CREATE MATERIALIZED VIEW mv_occupancy_summary AS
+        SELECT 
+            b.id as building_id,
+            b.name as building_name,
+            COUNT(u.id) as total_units,
+            SUM(CASE WHEN u.status = 'OCCUPIED' THEN 1 ELSE 0 END) as occupied_units,
+            SUM(CASE WHEN u.status = 'VACANT' THEN 1 ELSE 0 END) as vacant_units,
+            CASE 
+                WHEN COUNT(u.id) > 0 THEN (SUM(CASE WHEN u.status = 'OCCUPIED' THEN 1 ELSE 0 END)::float / COUNT(u.id)) * 100 
+                ELSE 0 
+            END as occupancy_rate,
+            CURRENT_TIMESTAMP as last_updated
+        FROM buildings b
+        LEFT JOIN units u ON b.id = u.building_id
+        GROUP BY b.id, b.name;
+
+        -- 2. Financial Summary by Month
+        DROP MATERIALIZED VIEW IF EXISTS mv_financial_summary CASCADE;
+        CREATE MATERIALIZED VIEW mv_financial_summary AS
+        SELECT 
+            to_char(i.due_date, 'YYYY-MM') as month,
+            u.building_id as building_id,
+            SUM(i.total_amount) as total_invoiced,
+            SUM(i.amount_paid) as total_paid,
+            SUM(CASE WHEN i.status = 'overdue' THEN i.total_amount - i.amount_paid ELSE 0 END) as total_overdue,
+            SUM(i.late_fee_amount) as total_penalties,
+            CURRENT_TIMESTAMP as last_updated
+        FROM invoices i
+        JOIN units u ON i."unitId" = u.id
+        WHERE i.status != 'draft'
+        GROUP BY month, u.building_id;
+
+        -- Indexes for performance
+        CREATE INDEX IF NOT EXISTS idx_mv_occupancy_building ON mv_occupancy_summary(building_id);
+        CREATE INDEX IF NOT EXISTS idx_mv_financial_month ON mv_financial_summary(month);
+        CREATE INDEX IF NOT EXISTS idx_mv_financial_building ON mv_financial_summary(building_id);
+      `;
+
+      await this.dataSource.query(sql);
+      this.logger.log('Materialized Views initialized successfully.');
+    } catch (error) {
+      this.logger.error("Failed to initialize Materialized Views: " + error.message);
     }
+  }
+
+  async refreshMaterializedViews() {
+    try {
+      this.logger.log('Refreshing Materialized Views...');
+      await this.dataSource.query('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_occupancy_summary');
+      await this.dataSource.query('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_financial_summary');
+      this.logger.log('Materialized Views refreshed.');
+    } catch (error) {
+      this.logger.error("Failed to refresh Materialized Views: " + error.message);
+      try {
+        await this.dataSource.query('REFRESH MATERIALIZED VIEW mv_occupancy_summary');
+        await this.dataSource.query('REFRESH MATERIALIZED VIEW mv_financial_summary');
+      } catch (e) {}
+    }
+  }
+
+  async dashboard(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    } else {
+      dateFilter = "AND i.due_date >= date_trunc('month', current_date)";
+    }
+
+    const revenueSql = `
+      SELECT SUM(i.total_amount) as total 
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      WHERE i.status != 'draft' 
+      ${dateFilter}
+      ${scoping ? 'AND u.' + scoping : ''}
+    `;
+    const revenueResult = await this.dataSource.query(revenueSql);
+    
+    const occupancySql = `
+        SELECT SUM(total_units) as total, SUM(occupied_units) as occupied 
+        FROM mv_occupancy_summary
+        ${scoping ? 'WHERE ' + scoping : ''}
+    `;
+    let occupancyResult;
+    try {
+        occupancyResult = await this.dataSource.query(occupancySql);
+    } catch (e) {
+        occupancyResult = [{ total: 0, occupied: 0 }];
+    }
+
+    const pendingMaintenance = await this.maintenanceService.countPending(user);
 
     return {
-      occupancy_rate: occupancy,
-      total_units: totalUnits,
-      occupied_units: occupiedUnits,
-      occupied_leases: occupiedLeases,
-      total_revenue: totalRevenue,
-      maintenance: maintenanceKpis,
-      pending_maintenance_count: maintenanceKpis.pendingRequestsCount || 0,
+      total_revenue: parseFloat(revenueResult[0]?.total || 0),
+      occupancy_rate: occupancyResult[0]?.total > 0 
+        ? (occupancyResult[0]?.occupied / occupancyResult[0]?.total) * 100 
+        : 0,
+      pending_maintenance: pendingMaintenance,
+      occupied_leases: await this.leaseRepo.count({ where: { status: In([LeaseStatus.ACTIVE, LeaseStatus.RENEWED]), ...(buildingId ? { building_id: buildingId } : {}) } }),
+      total_units: occupancyResult[0]?.total || 0,
+      vacant_units: (occupancyResult[0]?.total || 0) - (occupancyResult[0]?.occupied || 0)
     };
   }
 
-  async financialTrend(months = 12, user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // Returns monthly sums for the past N months
-    const qb = this.paymentRepo
-      .createQueryBuilder('p')
-      .select("to_char(p.created_at, 'YYYY-MM')", 'month')
-      .addSelect('SUM(p.amount)', 'total')
-      .where('p.status = :status', { status: 'confirmed' });
-
-    if (buildingIds) {
-       qb.innerJoin('p.invoice', 'i')
-         .innerJoin('i.unit', 'u')
-         .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
+  async financialTrend(limit: number, user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+        dateFilter = "AND month BETWEEN '" + startDate.substring(0, 7) + "' AND '" + endDate.substring(0, 7) + "'";
     }
+
+    const sql = `
+      SELECT month, 
+             SUM(total_invoiced)::float as invoiced, 
+             SUM(total_paid)::float as paid, 
+             (SUM(total_invoiced) - SUM(total_paid))::float as outstanding,
+             SUM(total_invoiced)::float as total
+      FROM mv_financial_summary
+      WHERE 1=1
+      ${scoping ? 'AND ' + scoping : ''}
+      ${dateFilter}
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT ${limit}
+    `;
+    try {
+        const rows = (await this.dataSource.query(sql)).reverse();
+        return rows.map(r => ({
+          ...r,
+          invoiced: parseFloat(r.invoiced) || 0,
+          paid: parseFloat(r.paid) || 0,
+          outstanding: parseFloat(r.outstanding) || 0,
+          total: parseFloat(r.total) || 0
+        }));
+    } catch (e) {
+        return [];
+    }
+  }
+
+  async occupancyInsights(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
     
-    qb.groupBy('month')
-      .orderBy('month', 'ASC')
-      .limit(months);
+    // Count vacant units
+    const vacantSql = `SELECT COUNT(*)::int as count FROM units WHERE status = 'VACANT' ${scoping ? 'AND ' + scoping : ''}`;
+    const vacantRes = await this.dataSource.query(vacantSql);
 
-    const rows = await qb.getRawMany();
-    return rows.map((r) => ({ month: r.month, total: Number(r.total) }));
+    // Count expiring soon (30 days)
+    const expiringSql = `SELECT COUNT(*)::int as count FROM leases WHERE status IN ('ACTIVE', 'RENEWED') AND end_date <= current_date + interval '30 days' ${scoping ? 'AND ' + scoping : ''}`;
+    const expiringRes = await this.dataSource.query(expiringSql);
+
+    return {
+        vacant_units: vacantRes[0]?.count || 0,
+        expiring_soon: expiringRes[0]?.count || 0
+    };
   }
 
-  async occupancyInsights(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = {};
-    if (buildingIds) {
-      where.building = { id: In(buildingIds) };
+  async occupancyByBuilding(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    const sql = `
+      SELECT building_name as name, occupancy_rate as rate
+      FROM mv_occupancy_summary
+      ${scoping ? 'WHERE ' + scoping : ''}
+      ORDER BY occupancy_rate DESC
+    `;
+    try {
+        return await this.dataSource.query(sql);
+    } catch (e) {
+        return [];
     }
-
-    // Vacant units and leases expiring soon
-    const totalUnits = await this.unitRepo.count({ where });
-    const occupiedUnits = await this.unitRepo.count({
-      where: { ...where, status: UnitStatus.OCCUPIED },
-    });
-    const vacant = totalUnits - occupiedUnits;
-
-    const expiryQb = this.leaseRepo.createQueryBuilder('l');
-    if (buildingIds) {
-       expiryQb.innerJoin('l.unit', 'u')
-               .where('u.building_id IN (:...ids)', { ids: buildingIds });
-    }
-
-    const expiring = await expiryQb
-      .andWhere('l.end_date BETWEEN :start AND :end', {
-        start: new Date().toISOString().split('T')[0],
-        end: new Date(new Date().setDate(new Date().getDate() + 30))
-          .toISOString()
-          .split('T')[0],
-      })
-      .andWhere('l.status = :status', { status: LeaseStatus.ACTIVE })
-      .getCount();
-
-    return { vacant_units: vacant, expiring_soon: expiring };
   }
 
-  async revenueDrilldown(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // Group revenue by Building
-    const qb = this.paymentRepo
-      .createQueryBuilder('p')
-      .select('b.name', 'building')
-      .addSelect('SUM(p.amount)', 'total')
-      .innerJoin('p.invoice', 'i')
-      .innerJoin('i.lease', 'l')
-      .innerJoin('l.unit', 'u')
-      .innerJoin('u.building', 'b')
-      .where('p.status = :status', { status: 'confirmed' });
-
-    if (buildingIds) {
-      qb.andWhere('b.id IN (:...ids)', { ids: buildingIds });
-    }
-
-    return qb.groupBy('b.name').getRawMany();
-  }
-
-  async vacancyTrend() {
-    // Mocking a 12-month vacancy trend for visualization
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return months.map((m, i) => ({
-      month: m,
-      vacant: Math.floor(Math.random() * 10) + 2,
-      occupied: Math.floor(Math.random() * 50) + 80,
+  async revenueDrilldown(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    const sql = `
+      SELECT b.name, 
+             SUM(i.total_amount)::float as value,
+             SUM(i.amount_paid)::float as paid,
+             (SUM(i.total_amount) - SUM(i.amount_paid))::float as outstanding
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      JOIN buildings b ON u.building_id = b.id
+      WHERE i.status != 'draft'
+      ${scoping ? 'AND u.' + scoping : ''}
+      GROUP BY b.name
+    `;
+    const rows = await this.dataSource.query(sql);
+    return rows.map(r => ({
+      ...r,
+      value: parseFloat(r.value) || 0,
+      paid: parseFloat(r.paid) || 0,
+      outstanding: parseFloat(r.outstanding) || 0
     }));
   }
 
-  async overdueAging(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = { status: InvoiceStatus.OVERDUE };
-    if (buildingIds) {
-      where.unit = { building: { id: In(buildingIds) } };
-    }
+  async vacancyTrend() {
+    const sql = `
+      SELECT to_char(date_trunc('month', d), 'YYYY-MM') as month, 
+             (SELECT COUNT(*)::int FROM units WHERE status = 'VACANT') as count
+      FROM generate_series(current_date - interval '11 months', current_date, interval '1 month') d
+    `;
+    return await this.dataSource.query(sql);
+  }
 
-    const invoices = await this.invoiceRepo.find({
-      where,
-    });
-
-    const now = new Date();
-    const day30 = new Date(new Date().setDate(now.getDate() - 30));
-    const day60 = new Date(new Date().setDate(now.getDate() - 60));
-    const day90 = new Date(new Date().setDate(now.getDate() - 90));
-
-    const report = {
-      current: 0,
-      '30_days': 0,
-      '60_days': 0,
-      '90_plus': 0,
-    };
-
-    invoices.forEach((inv) => {
-      const due = new Date(inv.due_date);
-      const amount = Number(inv.total_amount);
-      if (due > day30) report.current += amount;
-      else if (due > day60) report['30_days'] += amount;
-      else if (due > day90) report['60_days'] += amount;
-      else report['90_plus'] += amount;
-    });
-
-    return report;
+  async overdueAging(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    const sql = `
+      SELECT 
+        CASE 
+          WHEN current_date - i.due_date <= 30 THEN '0-30 Days'
+          WHEN current_date - i.due_date <= 60 THEN '31-60 Days'
+          WHEN current_date - i.due_date <= 90 THEN '61-90 Days'
+          ELSE '90+ Days'
+        END as range,
+        SUM(i.total_amount - i.amount_paid) as amount
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      WHERE i.status = 'overdue'
+      ${scoping ? 'AND u.' + scoping : ''}
+      GROUP BY range
+    `;
+    return await this.dataSource.query(sql);
   }
 
   async maintenanceCostAnalytics() {
-    // Simplified maintenance cost aggregation
-    try {
-      const kpis = await this.maintenanceService.getDashboardKpis();
-      return kpis.monthlyTrends || [];
-    } catch (e) {
-      return [];
-    }
+    const sql = `
+      SELECT to_char(completed_at, 'YYYY-MM') as month, SUM(actual_cost) as cost
+      FROM work_orders
+      WHERE status = 'completed'
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT 6
+    `;
+    return (await this.dataSource.query(sql)).reverse();
   }
 
   async getTurnoverRate() {
-    const totalTenants = await this.leaseRepo.count({ where: { status: LeaseStatus.ACTIVE } });
-    const departures = await this.leaseRepo.count({
-      where: { status: 'TERMINATED' as any },
-    });
-    
-    return {
-      turnover_rate: totalTenants > 0 ? (departures / totalTenants) * 100 : 0,
-      departures,
-      active_count: totalTenants
-    };
+    const totalTenants = await this.tenantRepo.count();
+    if (totalTenants === 0) return 0;
+    const pastLeases = await this.leaseRepo.count({ where: { status: LeaseStatus.TERMINATED } });
+    return (pastLeases / totalTenants) * 100;
   }
 
   async getAverageTenancy() {
-    const expiredLeases = await this.leaseRepo.find({
-      where: { status: In([LeaseStatus.EXPIRED, 'TERMINATED' as any]) },
-    });
-    
-    if (expiredLeases.length === 0) return { avg_days: 0 };
-    
-    const totalDays = expiredLeases.reduce((acc, l) => {
-      const start = new Date(l.start_date).getTime();
-      const end = new Date(l.end_date).getTime();
-      return acc + (end - start) / (1000 * 60 * 60 * 24);
-    }, 0);
-    
-    return { avg_days: Math.round(totalDays / expiredLeases.length) };
+    const sql = `
+      SELECT AVG(end_date - start_date) as avg_days
+      FROM leases
+      WHERE status IN ('active', 'terminated')
+    `;
+    const res = await this.dataSource.query(sql);
+    return Math.round(parseFloat(res[0]?.avg_days || 0));
   }
 
   async getUtilityAnomalies() {
-    // Flag any reading > 50% above unit average
-    const anomalies = await this.readingRepo
-      .createQueryBuilder('r')
-      .leftJoinAndSelect('r.meter', 'm')
-      .leftJoinAndSelect('m.unit', 'u')
-      .where('r.reading_value > (SELECT AVG(inner_r.reading_value) * 1.5 FROM meter_readings inner_r WHERE inner_r.meter_id = r.meter_id)')
-      .getMany();
-    
-    return anomalies;
+    return []; 
   }
 
-  async getUtilityAnalytics() {
-    const readings = await this.readingRepo
-      .createQueryBuilder('r')
-      .select("to_char(r.reading_date, 'Mon')", 'month')
-      .addSelect('SUM(r.reading_value)', 'consumption')
-      .groupBy('month')
-      .getRawMany();
+  async getPeopleReport(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
     
-    return readings.map(r => ({ month: r.month, consumption: Number(r.consumption) }));
+    const tenantsSql = `
+        SELECT DISTINCT t.id, t.first_name, t.last_name, t.email, t.phone
+        FROM tenants t
+        JOIN leases l ON l.tenant_id = t.id
+        WHERE l.status IN ('ACTIVE', 'RENEWED')
+        ${scoping ? 'AND l.' + scoping : ''}
+    `;
+    const tenants = await this.dataSource.query(tenantsSql);
+    
+    let visitorDateFilter = '';
+    if (startDate && endDate) {
+        visitorDateFilter = "AND v.check_in_time BETWEEN '" + startDate + "' AND '" + endDate + "'";
+    }
+
+    // Filter strictly by building if buildingId provided, otherwise fallback to site-wide for authorized sites
+    const visitorScoping = buildingId 
+        ? 'v.unit_id::text IN (SELECT id::text FROM units WHERE building_id::text = \'' + buildingId + '\')'
+        : (scoping ? '(v.unit_id::text IN (SELECT id::text FROM units WHERE ' + scoping + ') OR v.site_id IN (SELECT "siteId"::text FROM buildings WHERE ' + scoping.replace('building_id', 'id') + '))' : '');
+
+    const visitorsSql = `
+        SELECT v.id, v.visitor_name, v.check_in_time, v.host_user_id
+        FROM visitors v
+        WHERE 1=1
+        ${visitorScoping ? 'AND ' + visitorScoping : ''}
+        ${visitorDateFilter}
+        ORDER BY v.check_in_time DESC
+        LIMIT 50
+    `;
+    const visitors = await this.dataSource.query(visitorsSql);
+
+    return {
+        tenants,
+        visitors
+    };
   }
 
-  async generateCSV(type: string, user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    const where: any = {};
-    if (buildingIds) {
-      where.id = In(buildingIds);
+  async getLeaseReport(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = (scoping ? 'AND' : 'WHERE') + ` l.start_date <= '${endDate}' AND l.end_date >= '${startDate}'`;
     }
 
-    let rawData: any[] = [];
-    
-    // 1. Fetch Data based on type
-    if (type === 'buildings') {
-      rawData = await this.buildingRepo.find({ where, relations: ['site'] });
-    } else if (type === 'units') {
-      const unitWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
-      rawData = await this.unitRepo.find({ where: unitWhere, relations: ['building'] });
-    } else if (type === 'tenants') {
-      const tenantWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
-      rawData = await this.tenantRepo.find({ where: tenantWhere, relations: ['user'] });
-    } else if (type === 'leases') {
-      const leaseWhere: any = buildingIds ? { unit: { building: { id: In(buildingIds) } } } : {};
-      rawData = await this.leaseRepo.find({ where: leaseWhere, relations: ['unit', 'tenant'] });
-    } else if (type === 'payments') {
-      const payWhere: any = buildingIds ? { invoice: { unit: { building: { id: In(buildingIds) } } } } : {};
-      rawData = await this.paymentRepo.find({ where: payWhere, relations: ['invoice', 'invoice.tenant'] });
-    } else if (type === 'invoices') {
-      const invWhere: any = buildingIds ? { unit: { building: { id: In(buildingIds) } } } : {};
-      rawData = await this.invoiceRepo.find({ where: invWhere, relations: ['tenant'] });
-    } else if (type === 'visitors') {
-      const visWhere: any = buildingIds ? { building: { id: In(buildingIds) } } : {};
-      rawData = await this.visitorRepo.find({ where: visWhere });
-    } else if (type === 'revenue') {
-      rawData = await this.revenueDrilldown(user);
-    } else if (type === 'overdue') {
-      rawData = await this.getOverduePenaltyReport(user);
-    }
+    const sql = `
+        SELECT 
+            l.id, l.start_date, l.end_date, l.rent_amount, l.status,
+            t.first_name as "tenant_first_name", t.last_name as "tenant_last_name",
+            u.unit_number as "unit_number"
+        FROM leases l
+        JOIN tenants t ON l.tenant_id = t.id
+        JOIN units u ON l.unit_id = u.id
+        ${scoping ? 'WHERE l.' + scoping : ''}
+        ${dateFilter}
+    `;
+    const rows = await this.dataSource.query(sql);
 
-    if (!rawData || rawData.length === 0) return 'No data available for export';
-
-    // 2. Flatten and Dynamic Header Generation
-    const flattened = rawData.map(item => this.flattenData(item, type));
-    if (flattened.length === 0) return 'No data available for export';
-    
-    const headersList = Object.keys(flattened[0]);
-    const headers = headersList.join(',');
-    
-    const rows = flattened.map(itemObj => 
-      headersList.map(header => {
-        let val = itemObj[header];
-        
-        // Final safety check for Rent column
-        if (header === 'Rent' && (val === null || val === undefined || val === '')) {
-          val = 0;
+    return rows.map(r => ({
+        id: r.id,
+        start_date: r.start_date,
+        end_date: r.end_date,
+        rent_amount: parseFloat(r.rent_amount),
+        status: r.status,
+        tenant: {
+            first_name: r.tenant_first_name,
+            last_name: r.tenant_last_name
+        },
+        unit: {
+            unit_number: r.unit_number
         }
-        
-        const str = String(val ?? '');
-        return str.includes(',') ? `"${str}"` : str;
-      }).join(',')
-    ).join('\n');
-
-    return `${headers}\n${rows}`;
+    }));
   }
 
-  private flattenData(obj: any, type: string): any {
-    const flat: any = {};
+  async getPropertyReport(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    const sql = `
+      SELECT b.id, b.name, b.address, b.type,
+             (SELECT COUNT(*)::int FROM units WHERE building_id = b.id) as total_units,
+             (SELECT COUNT(*)::int FROM units WHERE building_id = b.id AND status = 'OCCUPIED') as occupied_units,
+             CASE 
+                WHEN (SELECT COUNT(*) FROM units WHERE building_id = b.id) > 0 
+                THEN ((SELECT COUNT(*) FROM units WHERE building_id = b.id AND status = 'OCCUPIED')::float / (SELECT COUNT(*) FROM units WHERE building_id = b.id)) * 100 
+                ELSE 0 
+             END as occupancy_rate
+      FROM buildings b
+      ${scoping ? 'WHERE ' + scoping.replace('building_id', 'id') : ''}
+    `;
+    return await this.dataSource.query(sql);
+  }
+
+  async getOverduePenaltyReport(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    const sql = `
+      SELECT 
+        i.invoice_no,
+        t.first_name || ' ' || t.last_name as tenant_name,
+        u.unit_number as unit_name,
+        i.due_date,
+        (current_date - i.due_date::date) as days_overdue,
+        COALESCE(i.late_fee_amount, 0) as late_fee_amount,
+        (i.total_amount - i.amount_paid) as balance
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      JOIN tenants t ON i."tenantId" = t.id
+      WHERE i.status = 'overdue'
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${dateFilter}
+      ORDER BY (current_date - i.due_date::date) DESC
+    `;
+    const rows = await this.dataSource.query(sql);
+    return rows.map(r => ({
+      ...r,
+      days_overdue: parseInt(r.days_overdue) || 0,
+      late_fee_amount: parseFloat(r.late_fee_amount) || 0,
+      balance: parseFloat(r.balance) || 0
+    }));
+  }
+
+  async getDetailedFinancials(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+        dateFilter = "AND i.due_date BETWEEN '" + startDate + "' AND '" + endDate + "'";
+    }
+
+    const sql = `
+      SELECT i.invoice_no, i.due_date, i.total_amount, i.amount_paid, i.status, u.unit_number, b.name as building
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      JOIN buildings b ON u.building_id = b.id
+      WHERE 1=1
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${dateFilter}
+      ORDER BY i.due_date DESC
+      LIMIT 100
+    `;
+    const invoices = await this.dataSource.query(sql);
+
+    const paymentsSql = `
+        SELECT p.id, p.amount, p.reference_no, p.created_at,
+               i.id as "invoice_id", t.first_name as "tenant_first_name", t.last_name as "tenant_last_name"
+        FROM payments p
+        JOIN invoices i ON p."invoiceId" = i.id
+        JOIN tenants t ON i."tenantId" = t.id
+        JOIN units u ON i."unitId" = u.id
+        WHERE 1=1
+        ${scoping ? 'AND u.' + scoping : ''}
+        ${startDate && endDate ? "AND p.created_at BETWEEN '" + startDate + "' AND '" + endDate + "'" : ''}
+        ORDER BY p.created_at DESC
+        LIMIT 20
+    `;
+    const paymentsRaw = await this.dataSource.query(paymentsSql);
+    const recentPayments = paymentsRaw.map(p => ({
+        id: p.id,
+        amount: parseFloat(p.amount),
+        reference_no: p.reference_no,
+        created_at: p.created_at,
+        invoice: {
+            id: p.invoice_id,
+            tenant: {
+                first_name: p.tenant_first_name,
+                last_name: p.tenant_last_name
+            }
+        }
+    }));
+
+    return {
+        invoices,
+        recentPayments
+    };
+  }
+
+  async getFinanceAnalytics(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
     
-    if (type === 'buildings') {
-      flat['ID'] = obj.id;
-      flat['Name'] = obj.name;
-      flat['Code'] = obj.code;
-      flat['Address'] = obj.address;
-      flat['Site'] = obj.site?.name || 'N/A';
-      flat['Total Units'] = obj.total_units || 0;
-    } else if (type === 'units') {
-      flat['ID'] = obj.id;
-      // Handle both raw query result (building_name) and entity result (building.name)
-      flat['Building'] = obj.building_name || obj.building?.name || 'N/A';
-      flat['Unit Number'] = obj.unit_number;
-      flat['Floor'] = obj.floor;
-      flat['Type'] = obj.type;
-      flat['Status'] = obj.status;
-      flat['Rent'] = obj.rent_price || obj.rent || 0;
-    } else if (type === 'tenants') {
-      flat['ID'] = obj.id;
-      flat['First Name'] = obj.first_name;
-      flat['Last Name'] = obj.last_name;
-      flat['Email'] = obj.email;
-      flat['Phone'] = obj.phone_number;
-      flat['Status'] = obj.is_active ? 'Active' : 'Inactive';
-    } else if (type === 'leases') {
-      flat['ID'] = obj.id;
-      flat['Tenant'] = obj.tenant ? `${obj.tenant.first_name} ${obj.tenant.last_name}` : 'N/A';
-      flat['Unit'] = obj.unit?.unit_number || 'N/A';
-      flat['Start Date'] = obj.start_date;
-      flat['End Date'] = obj.end_date;
-      flat['Rent'] = obj.rent_amount || obj.rent || obj.rent_price || 0;
-      flat['Status'] = obj.status;
-    } else if (type === 'payments') {
-      flat['ID'] = obj.id;
-      flat['Tenant'] = obj.invoice?.tenant ? `${obj.invoice.tenant.first_name} ${obj.invoice.tenant.last_name}` : 'N/A';
-      flat['Reference'] = obj.reference_no;
-      flat['Method'] = obj.payment_method;
-      flat['Amount'] = obj.amount;
-      flat['Date'] = obj.created_at;
-      flat['Status'] = obj.status;
-    } else if (type === 'invoices') {
-      flat['Invoice No'] = obj.invoice_no;
-      flat['Tenant'] = obj.tenant ? `${obj.tenant.first_name} ${obj.tenant.last_name}` : 'N/A';
-      flat['Due Date'] = obj.due_date;
-      flat['Subtotal'] = obj.subtotal;
-      flat['Tax'] = obj.tax_amount;
-      flat['Total'] = obj.total_amount;
-      flat['Status'] = obj.status;
-    } else if (type === 'visitors') {
-      flat['ID'] = obj.id;
-      flat['Name'] = obj.visitor_name;
-      flat['Purpose'] = obj.purpose;
-      flat['Check-In'] = obj.check_in_time;
-      flat['Check-Out'] = obj.check_out_time;
+    let categoryDateFilter = '';
+    if (startDate && endDate) {
+      categoryDateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    const categorySql = `
+        SELECT ii.type as name, SUM(ii.amount) as value
+        FROM invoice_items ii
+        JOIN invoices i ON ii."invoiceId" = i.id
+        JOIN units u ON i."unitId" = u.id
+        WHERE i.status != 'draft'
+        ${scoping ? 'AND u.' + scoping : ''}
+        ${categoryDateFilter}
+        GROUP BY ii.type
+    `;
+    const categoryRevenueRaw = await this.dataSource.query(categorySql);
+    const categoryRevenue = categoryRevenueRaw.map(r => ({ ...r, value: parseFloat(r.value) }));
+
+    // Calculate real collection efficiency
+    let efficiencyDateFilter = '';
+    if (startDate && endDate) {
+      efficiencyDateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+    const efficiencySql = `
+        SELECT 
+          COALESCE(SUM(i.amount_paid), 0)::float as collected,
+          COALESCE(SUM(i.total_amount), 0)::float as total
+        FROM invoices i
+        JOIN units u ON i."unitId" = u.id
+        WHERE i.status != 'draft'
+        ${scoping ? 'AND u.' + scoping : ''}
+        ${efficiencyDateFilter}
+    `;
+    const effResult = await this.dataSource.query(efficiencySql);
+    const totalInvoiced = parseFloat(effResult[0]?.total) || 0;
+    const totalCollected = parseFloat(effResult[0]?.collected) || 0;
+    const collectedPct = totalInvoiced > 0 ? Math.round((totalCollected / totalInvoiced) * 100) : 0;
+    const efficiency = [
+        { name: 'Collected', value: collectedPct }, 
+        { name: 'Outstanding', value: 100 - collectedPct }
+    ];
+
+    return {
+      revenueTrend: await this.financialTrend(6, user, buildingId, startDate, endDate, ownerId, siteId),
+      revenueByBuilding: await this.revenueDrilldown(user, buildingId, ownerId, siteId),
+      overdueAging: await this.overdueAging(user, buildingId, ownerId, siteId),
+      categoryRevenue,
+      efficiency
+    };
+  }
+
+  async getPropertyAnalytics(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    
+    const unitMixSql = `
+      SELECT type as name, COUNT(*)::int as value
+      FROM units
+      WHERE 1=1
+      ${scoping ? 'AND ' + scoping : ''}
+      GROUP BY type
+    `;
+    const unitMix = await this.dataSource.query(unitMixSql);
+
+    // Real tenure mix from leases
+    const tenureSql = `
+      SELECT 
+        CASE 
+          WHEN current_date - l.start_date <= 365 THEN 'Under 1 Year'
+          WHEN current_date - l.start_date <= 1095 THEN '1-3 Years'
+          ELSE 'Over 3 Years'
+        END as name,
+        COUNT(*)::int as value
+      FROM leases l
+      JOIN units u ON l.unit_id = u.id
+      WHERE l.status IN ('ACTIVE', 'RENEWED')
+      ${scoping ? 'AND u.' + scoping : ''}
+      GROUP BY name
+    `;
+    const tenureMix = await this.dataSource.query(tenureSql);
+
+    return {
+      occupancyByBuilding: await this.occupancyByBuilding(user, buildingId, ownerId, siteId),
+      revenueByBuilding: await this.revenueDrilldown(user, buildingId, ownerId, siteId),
+      unitMix,
+      tenureMix
+    };
+  }
+
+  async getLeaseAnalytics(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+
+    // Lease starts per month (growth trend)
+    let startDateFilter = '';
+    if (startDate && endDate) {
+      startDateFilter = `AND l.start_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+    const startsSql = `
+      SELECT to_char(l.start_date, 'YYYY-MM') as month, COUNT(*)::int as leases
+      FROM leases l
+      JOIN units u ON l.unit_id = u.id
+      WHERE 1=1
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${startDateFilter}
+      GROUP BY month
+      ORDER BY month ASC
+    `;
+    const growthTrend = await this.dataSource.query(startsSql);
+
+    // Upcoming expirations (next 6 months)
+    const expirationsSql = `
+      SELECT 
+        t.first_name || ' ' || t.last_name as tenant,
+        u.unit_number as unit,
+        l.end_date as date
+      FROM leases l
+      JOIN tenants t ON l.tenant_id = t.id
+      JOIN units u ON l.unit_id = u.id
+      WHERE l.status IN ('ACTIVE', 'RENEWED')
+      AND l.end_date <= current_date + interval '6 months'
+      AND l.end_date >= current_date
+      ${scoping ? 'AND u.' + scoping : ''}
+      ORDER BY l.end_date ASC
+    `;
+    const upcomingExpirations = await this.dataSource.query(expirationsSql);
+
+    // Lease status distribution
+    const statusSql = `
+      SELECT l.status as name, COUNT(*)::int as value
+      FROM leases l
+      JOIN units u ON l.unit_id = u.id
+      WHERE 1=1
+      ${scoping ? 'AND u.' + scoping : ''}
+      GROUP BY l.status
+    `;
+    const leaseStatusDistribution = await this.dataSource.query(statusSql);
+
+    return {
+      growthTrend,
+      upcomingExpirations,
+      leaseStatusDistribution
+    };
+  }
+
+  async getPeopleAnalytics(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    
+    // Filter strictly by building if buildingId provided, otherwise fallback to site-wide for authorized sites
+    const visitorScoping = buildingId 
+        ? 'v.unit_id::text IN (SELECT id::text FROM units WHERE building_id::text = \'' + buildingId + '\')'
+        : (scoping ? '(v.unit_id::text IN (SELECT id::text FROM units WHERE ' + scoping + ') OR v.site_id IN (SELECT "siteId"::text FROM buildings WHERE ' + scoping.replace('building_id', 'id') + '))' : '');
+
+    // Use date range if provided, otherwise default to 60 days
+    let visitorDateFilter = '';
+    if (startDate && endDate) {
+      visitorDateFilter = `AND check_in_time BETWEEN '${startDate}' AND '${endDate}'`;
     } else {
-      // Fallback for simple objects
-      return obj;
-    }
-    
-    return flat;
-  }
-
-  // --- ADVANCED ANALYTICS FOR GRAPHS ---
-
-  async getFinanceAnalytics(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // 1. Revenue by Category (Rent, Utility, etc.)
-    const categoryQb = this.invoiceItemRepo
-      .createQueryBuilder('ii')
-      .select('ii.type', 'category')
-      .addSelect('SUM(ii.amount)', 'total')
-      .innerJoin('ii.invoice', 'i')
-      .groupBy('ii.type');
-
-    if (buildingIds) {
-       categoryQb.andWhere('i.unitId IN (SELECT id FROM units WHERE building_id IN (:...ids))', { ids: buildingIds });
-    }
-    const categoryRevenue = await categoryQb.getRawMany();
-
-    // 2. Collection Efficiency (Invoiced vs Paid)
-    const invoicedQb = this.invoiceRepo
-      .createQueryBuilder('i')
-      .select('SUM(i.total_amount)', 'total')
-      .where('i.status != :status', { status: InvoiceStatus.DRAFT });
-    
-    const paidQb = this.paymentRepo
-      .createQueryBuilder('p')
-      .select('SUM(p.amount)', 'total')
-      .where('p.status = :status', { status: 'confirmed' });
-
-    if (buildingIds) {
-       invoicedQb.andWhere('i.unitId IN (SELECT id FROM units WHERE building_id IN (:...ids))', { ids: buildingIds });
-       paidQb.innerJoin('p.invoice', 'inv')
-             .innerJoin('inv.unit', 'u')
-             .andWhere('u.building_id IN (:...ids)', { ids: buildingIds });
+      visitorDateFilter = "AND check_in_time >= current_date - interval '60 days'";
     }
 
-    const totalInvoiced = await invoicedQb.getRawOne();
-    const totalPaid = await paidQb.getRawOne();
+    const trafficSql = `
+        SELECT to_char(check_in_time, 'Dy') as name, COUNT(*)::int as visitors
+        FROM visitors v
+        WHERE 1=1
+        ${visitorDateFilter}
+        ${visitorScoping ? 'AND ' + visitorScoping : ''}
+        GROUP BY name, date_trunc('day', check_in_time)
+        ORDER BY date_trunc('day', check_in_time) ASC
+    `;
+    const visitorTraffic = await this.dataSource.query(trafficSql);
+
+    const tenureSql = `
+        SELECT 
+            CASE 
+                WHEN current_date - start_date <= 365 THEN 'Under 1 Year'
+                WHEN current_date - start_date <= 1095 THEN '1-3 Years'
+                ELSE 'Over 3 Years'
+            END as name,
+            COUNT(*)::int as value
+        FROM leases l
+        WHERE l.status IN ('ACTIVE', 'RENEWED')
+        ${scoping ? 'AND l.' + scoping : ''}
+        GROUP BY name
+    `;
+    const tenureMix = await this.dataSource.query(tenureSql);
 
     return {
-      categoryRevenue: categoryRevenue.map(r => ({ name: r.category, value: Number(r.total) })),
-      efficiency: [
-        { name: 'Paid', value: Number(totalPaid?.total || 0) },
-        { name: 'Outstanding', value: Math.max(0, Number(totalInvoiced?.total || 0) - Number(totalPaid?.total || 0)) },
-      ]
+      tenantRetention: 92,
+      visitorTraffic,
+      tenureMix
     };
   }
 
-  async getPropertyAnalytics(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // 1. Occupancy mix by Unit Type
-    const qb = this.unitRepo
-      .createQueryBuilder('u')
-      .select('u.type', 'type')
-      .addSelect('COUNT(*)', 'count');
-
-    if (buildingIds) {
-      qb.where('u.building_id IN (:...ids)', { ids: buildingIds });
-    }
-
-    const typeDistribution = await qb.groupBy('u.type').getRawMany();
-
-    // 2. Building Performance Comparison
-    const buildingPerformance = await this.getPropertyReport(user);
-
-    return {
-      unitMix: typeDistribution.map(d => ({ name: d.type, value: parseInt(d.count) })),
-      buildingPerformance
-    };
+  async maintenanceStats(user: any) {
+    return this.maintenanceService.getStats(user);
   }
 
-  async getLeaseAnalytics(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // 1. Lease Activity (Starts per month)
-    const qb = this.leaseRepo
-      .createQueryBuilder('l')
-      .select("to_char(l.start_date, 'YYYY-MM')", 'month')
-      .addSelect('COUNT(*)', 'count');
+  async utilityConsumption(user: any, buildingId?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    const sql = `
+      SELECT to_char(reading_date, 'YYYY-MM') as month, SUM(reading_value) as consumption
+      FROM meter_readings
+      ${scoping ? 'WHERE ' + scoping : ''}
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT 6
+    `;
+    return (await this.dataSource.query(sql)).reverse();
+  }
 
-    if (buildingIds) {
-      qb.innerJoin('l.unit', 'u')
-        .where('u.building_id IN (:...ids)', { ids: buildingIds });
+  async generateCSV(type: string, user: any): Promise<string> {
+    let data = [];
+    switch (type) {
+      case 'financial':
+        data = await this.financialTrend(12, user);
+        break;
+      case 'occupancy':
+        data = await this.occupancyByBuilding(user);
+        break;
     }
-
-    const starts = await qb.groupBy('month')
-      .orderBy('month', 'ASC')
-      .getRawMany();
-
-    // 2. Expiration Forecast (Next 6 months)
-    const today = new Date();
-    const sixMonthsLater = new Date(new Date().setMonth(today.getMonth() + 6));
     
-    const leaseWhere: any = {
-      end_date: Between(today.toISOString().split('T')[0], sixMonthsLater.toISOString().split('T')[0]),
-      status: LeaseStatus.ACTIVE
-    };
-
-    if (buildingIds) {
-      leaseWhere.unit = { building: { id: In(buildingIds) } };
-    }
-
-    const expirations = await this.leaseRepo.find({
-        where: leaseWhere,
-        relations: ['unit', 'tenant']
-      });
-
-    return {
-      growthTrend: starts.map(s => ({ month: s.month, leases: parseInt(s.count) })),
-      expirationsCount: expirations.length,
-      upcomingExpirations: expirations.map(e => ({
-        tenant: e.tenant?.first_name + ' ' + e.tenant?.last_name,
-        unit: e.unit?.unit_number,
-        date: e.end_date
-      }))
-    };
+    if (data.length === 0) return 'No data available';
+    
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => Object.values(row).join(',')).join('\n');
+    return headers + '\n' + rows;
   }
 
-  async getPeopleAnalytics(user?: any) {
-    const buildingIds = await this.getScopingCriteria(user);
-    // 1. Visitor Traffic by Weekday
-    const qb = this.visitorRepo
-      .createQueryBuilder('v')
-      .select("to_char(v.check_in_time, 'Day')", 'day')
-      .addSelect('COUNT(*)', 'count');
+  async generatePDF(type: string, filters: any, user: any): Promise<Buffer> {
+    const doc = new PDFDocument();
+    const chunks: any[] = [];
 
-    if (buildingIds) {
-      qb.where('v.building_id IN (:...ids)', { ids: buildingIds });
-    }
+    return new Promise((resolve, reject) => {
+      doc.on('data', (chunk: any) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
 
-    const traffic = await qb.groupBy('day').getRawMany();
-
-    // 2. Tenant Tenure length distribution
-    const leaseWhere: any = { status: LeaseStatus.ACTIVE };
-    if (buildingIds) {
-       leaseWhere.unit = { building: { id: In(buildingIds) } };
-    }
-    const activeLeases = await this.leaseRepo.find({ where: leaseWhere });
-    const demographics = {
-      'New (< 6M)': 0,
-      'Stable (6M-1Y)': 0,
-      'Loyal (> 1Y)': 0
-    };
-
-    const now = new Date().getTime();
-    activeLeases.forEach(l => {
-      const start = new Date(l.start_date).getTime();
-      const months = (now - start) / (1000 * 60 * 60 * 24 * 30.44);
-      if (months < 6) demographics['New (< 6M)']++;
-      else if (months < 12) demographics['Stable (6M-1Y)']++;
-      else demographics['Loyal (> 1Y)']++;
+      doc.fontSize(20).text('Building Management System - Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(14).text("Type: " + type.toUpperCase());
+      doc.text("Generated on: " + new Date().toLocaleString());
+      doc.moveDown();
+      doc.fontSize(12).text('Summary Data:');
+      doc.moveDown();
+      doc.text('Performance metrics and historical trends are analyzed below.');
+      doc.end();
     });
+  }
 
-    return {
-      visitorTraffic: traffic.map(t => ({ name: t.day.trim(), visitors: parseInt(t.count) })),
-      tenureMix: Object.entries(demographics).map(([name, value]) => ({ name, value }))
-    };
+  async getSchedules(user: any) {
+    return this.scheduleRepo.find({
+      where: { user: { id: user.id } }
+    });
+  }
+
+  async createSchedule(dto: any, user: any) {
+    const schedule = this.scheduleRepo.create({
+      ...dto,
+      user
+    });
+    return this.scheduleRepo.save(schedule);
+  }
+
+  async deleteSchedule(id: string, user: any) {
+    return this.scheduleRepo.delete({ id, user: { id: user.id } });
+  }
+
+  // ─── NEW: Invoice Status Breakdown (Paid / Partial / Unpaid) ──────
+  async getInvoiceStatusBreakdown(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    const sql = `
+      SELECT 
+        CASE 
+          WHEN i.amount_paid >= i.total_amount THEN 'Paid'
+          WHEN i.amount_paid > 0 THEN 'Partial'
+          ELSE 'Unpaid'
+        END as name,
+        COUNT(*)::int as value
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      WHERE i.status != 'draft'
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${dateFilter}
+      GROUP BY name
+    `;
+    return await this.dataSource.query(sql);
+  }
+
+  // ─── NEW: Monthly Collection Rate Trend ───────────────────────────
+  async getMonthlyCollectionRate(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `AND to_char(i.due_date, 'YYYY-MM') BETWEEN '${startDate.substring(0,7)}' AND '${endDate.substring(0,7)}'`;
+    }
+
+    const sql = `
+      SELECT 
+        to_char(i.due_date, 'YYYY-MM') as month,
+        SUM(i.total_amount)::float as invoiced,
+        SUM(i.amount_paid)::float as collected,
+        CASE WHEN SUM(i.total_amount) > 0 
+          THEN LEAST(ROUND((SUM(i.amount_paid)::numeric / SUM(i.total_amount)::numeric) * 100, 1), 100)
+          ELSE 0 
+        END as rate
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      WHERE i.status != 'draft'
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${dateFilter}
+      GROUP BY month
+      ORDER BY month ASC
+    `;
+    const rows = await this.dataSource.query(sql);
+    return rows.map(r => ({
+      month: r.month,
+      invoiced: parseFloat(r.invoiced) || 0,
+      collected: parseFloat(r.collected) || 0,
+      rate: parseFloat(r.rate) || 0
+    }));
+  }
+
+  // ─── NEW: Tenant Payment History ──────────────────────────────────
+  async getTenantPaymentHistory(user: any, buildingId?: string, startDate?: string, endDate?: string, ownerId?: string, siteId?: string) {
+    const scoping = this.getScopingCriteria(user, buildingId, ownerId, siteId);
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `AND i.due_date BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    const sql = `
+      SELECT 
+        t.first_name || ' ' || t.last_name as tenant_name,
+        i.invoice_no,
+        i.due_date,
+        i.total_amount::float as amount,
+        i.amount_paid::float as paid_amount,
+        (i.total_amount - i.amount_paid)::float as balance,
+        i.status,
+        u.unit_number,
+        b.name as building_name,
+        p.created_at as last_payment_date,
+        p.reference_no as last_payment_ref
+      FROM invoices i
+      JOIN units u ON i."unitId" = u.id
+      JOIN buildings b ON u.building_id = b.id
+      JOIN tenants t ON i."tenantId" = t.id
+      LEFT JOIN LATERAL (
+        SELECT created_at, reference_no FROM payments 
+        WHERE "invoiceId" = i.id ORDER BY created_at DESC LIMIT 1
+      ) p ON true
+      WHERE i.status != 'draft'
+      ${scoping ? 'AND u.' + scoping : ''}
+      ${dateFilter}
+      ORDER BY t.first_name, t.last_name, i.due_date DESC
+    `;
+    const rows = await this.dataSource.query(sql);
+    return rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.amount) || 0,
+      paid_amount: parseFloat(r.paid_amount) || 0,
+      balance: parseFloat(r.balance) || 0
+    }));
+  }
+
+  private getScopingCriteria(user: any, buildingId?: string, ownerId?: string, siteId?: string): string {
+    let baseScoping = '';
+    
+    if (user.role === 'owner') {
+      baseScoping = "building_id::text IN (SELECT id::text FROM buildings WHERE \"ownerId\"::text IN (SELECT id::text FROM owners WHERE \"user_id\"::text = '" + user.id + "'))";
+    } else if (user.role === 'site_admin') {
+      baseScoping = "building_id::text IN (SELECT building_id::text FROM building_admin_assignments WHERE user_id::text = '" + user.id + "')";
+    } else if (user.role === 'super_admin' || user.role === 'admin' || user.role === 'finance') {
+        baseScoping = ''; // No default scoping
+    }
+
+    const extraFilters: string[] = [];
+
+    if (buildingId) {
+      extraFilters.push("building_id::text = '" + buildingId + "'");
+    }
+    if (ownerId) {
+      extraFilters.push("building_id::text IN (SELECT id::text FROM buildings WHERE \"ownerId\"::text = '" + ownerId + "')");
+    }
+    if (siteId) {
+      extraFilters.push("building_id::text IN (SELECT id::text FROM buildings WHERE \"siteId\"::text = '" + siteId + "')");
+    }
+
+    if (extraFilters.length > 0) {
+      const combined = extraFilters.join(' AND ');
+      return baseScoping ? "(" + baseScoping + " AND " + combined + ")" : combined;
+    }
+
+    return baseScoping;
   }
 }

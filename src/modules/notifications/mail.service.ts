@@ -53,6 +53,23 @@ export class MailService {
     }
   }
 
+  async sendMail(options: nodemailer.SendMailOptions) {
+    try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        this.logger.warn(`[Email Service (Console Fallback)] SMTP not configured. Log: ${JSON.stringify(options)}`);
+        return;
+      }
+      await this.transporter.sendMail({
+        from: process.env.FROM_EMAIL || `"BMS App" <noreply@example.com>`,
+        ...options,
+      });
+      this.logger.log(`[Email Service] Generic email sent to ${options.to}`);
+    } catch (error) {
+      this.logger.error(`[Email Service] Failed to send generic email`, error);
+      throw error;
+    }
+  }
+
   private generateHtmlTemplate(title: string, message: string, companyName: string, actionUrl: string): string {
     return `
 <!DOCTYPE html>

@@ -41,7 +41,7 @@ import { Tenant } from '../tenants/entities/tenant.entity';
     NotificationProcessor,
   ],
   controllers: [NotificationsController],
-  exports: [NotificationsService],
+  exports: [NotificationsService, MailService],
 })
 export class NotificationsModule {}
 // If you have both notification.service.ts and notifications.service.ts, this can cause confusion and only one will be registered. Remove or rename one to avoid issues.

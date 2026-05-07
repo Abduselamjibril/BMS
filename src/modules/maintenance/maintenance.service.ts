@@ -798,4 +798,18 @@ export class MaintenanceService {
 
     return { reqBreached, woBreached };
   }
+
+  async countPending(user: any) {
+    const kpis = await this.getDashboardKpis(undefined, user);
+    return kpis.pendingRequestsCount;
+  }
+
+  async getStats(user: any) {
+    const kpis = await this.getDashboardKpis(undefined, user);
+    return {
+      pending: kpis.pendingRequestsCount,
+      completed: kpis.contractorStats.reduce((sum: number, c: any) => sum + c.completedOrders, 0),
+      avgResolutionTime: kpis.avgResolutionTime,
+    };
+  }
 }
